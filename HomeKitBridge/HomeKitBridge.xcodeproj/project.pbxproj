@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B7A1C0DE000000000000003D /* History.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE000000000000003C /* History.swift */; };
 		B7A1C0DE0000000000000038 /* ToolsMore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000032 /* ToolsMore.swift */; };
 		B7A1C0DE0000000000000039 /* ToolDefinitionsMore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000033 /* ToolDefinitionsMore.swift */; };
 		B7A1C0DE000000000000003A /* PrivateTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000034 /* PrivateTools.swift */; };
@@ -49,6 +50,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B7A1C0DE000000000000003C /* History.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "History.swift"; sourceTree = "<group>"; };
 		B7A1C0DE0000000000000032 /* ToolsMore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ToolsMore.swift"; sourceTree = "<group>"; };
 		B7A1C0DE0000000000000033 /* ToolDefinitionsMore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ToolDefinitionsMore.swift"; sourceTree = "<group>"; };
 		B7A1C0DE0000000000000034 /* PrivateTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PrivateTools.swift"; sourceTree = "<group>"; };
@@ -116,6 +118,7 @@
 				B7A1C0DE0000000000000016 /* Tools.swift */,
 				B7A1C0DE0000000000000017 /* ToolDefinitions.swift */,
 				B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */,
+				B7A1C0DE000000000000003C /* History.swift */,
 				B7A1C0DE0000000000000032 /* ToolsMore.swift */,
 				B7A1C0DE0000000000000033 /* ToolDefinitionsMore.swift */,
 				B7A1C0DE0000000000000034 /* PrivateTools.swift */,
@@ -243,6 +246,7 @@
 				B7A1C0DE000000000000001D /* Tools.swift in Sources */,
 				B7A1C0DE000000000000001E /* ToolDefinitions.swift in Sources */,
 				B7A1C0DE0000000000000024 /* MenuBarProtocol.swift in Sources */,
+				B7A1C0DE000000000000003D /* History.swift in Sources */,
 				B7A1C0DE0000000000000038 /* ToolsMore.swift in Sources */,
 				B7A1C0DE0000000000000039 /* ToolDefinitionsMore.swift in Sources */,
 				B7A1C0DE000000000000003A /* PrivateTools.swift in Sources */,

@@ -30,6 +30,7 @@ claude.ai ──> your FastMCP server (OAuth) ──> vps/homekit_tools.py
 | `homekit_cameras` | List, settings HomeKit exposes (for example microphone mute and volume), snapshot (capture date, or the JPEG with `image=true`) |
 | `homekit_scene_actions` | Built-in scenes (Good Morning and friends), add or remove single actions in a scene |
 | `homekit_triggers` | Full automations: several events (value, any change, range, button, time, sun, presence, location), end events, nested any/all/not conditions, execute once, several scenes; timer automations with recurrence; update in place |
+| `homekit_history` | Local history of every device: status, devices, query, events, summaries (occupancy, on times, levels, activity, co-changes, automations), read-only SQL, pause/resume, snapshot_now, notify_now |
 | `private_probe`, `private_homed_db` | Optional, undocumented HomeKit: see below |
 
 Every write takes `dry_run`. Changes that need several HomeKit calls roll back the earlier steps if a
@@ -107,6 +108,18 @@ Local MCP clients on the Mac can skip the server and call `http://127.0.0.1:1876
 - Bearer token in `~/.config/homekit-bridge/token` (mode 600), created on first launch.
 - Host header check (localhost, 127.0.0.1, 100.x, `*.ts.net`), 1 MB body cap, 120 requests a minute.
 - Every write supports `dry_run`; every write is logged on the Mac and, through `audit`, on the server.
+
+## History logger
+
+From 2.1 the bridge records every readable characteristic that sends change notifications, on every
+home, into `~/Library/Application Support/homekit-bridge/history.sqlite`, so usage can be studied later
+(for example to propose scenes and automations). It records changes as they happen (including the
+bridge's own writes, which HomeKit does not report back), a snapshot every 15 minutes, a re-read of
+mains-powered accessories every hour, and scene runs. Its only HomeKit write is switching change
+notifications on. Retention is unlimited: plan on a few GB a year for a home of about 170 accessories;
+`homekit_history status` shows the size. The `sql` action accepts one SELECT, WITH or EXPLAIN statement
+and stops any query after 15 seconds. Homes without a reachable home hub record nothing, and automation
+runs are not recorded on a Mac (HMTrigger.lastFireDate is no longer supported there).
 
 ## Undocumented (private) HomeKit layer
 

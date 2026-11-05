@@ -3,7 +3,7 @@ import Foundation
 /// Schemas for the tools in ToolsMore.swift and PrivateTools.swift.
 /// MCPHandler lists `ToolRouter.allDefinitions` (see PATCH.md).
 extension ToolRouter {
-    static var allDefinitions: [[String: Any]] { definitions + moreDefinitions }
+    static var allDefinitions: [[String: Any]] { definitions + moreDefinitions + History.definitions }
 
     fileprivate static func s(_ d: String) -> [String: Any] { ["type": "string", "description": d] }
     fileprivate static func n(_ d: String) -> [String: Any] { ["type": "number", "description": d] }

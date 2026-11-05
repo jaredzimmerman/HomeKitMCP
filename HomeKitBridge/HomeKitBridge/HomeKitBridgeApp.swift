@@ -199,7 +199,7 @@ final class BridgeModel {
 enum BridgeConfig {
     static let port: UInt16 = 18767        // local listener
     static let tailnetPort: UInt16 = 8767  // what `tailscale serve` exposes and the VPS calls
-    static let version = "2.0.0"
+    static let version = "2.1.0"
     static var actionLogPath: String {
         TokenFile.directory.replacingOccurrences(of: "/.config/homekit-bridge", with: "/Library/Logs/homekit-bridge")
             + "/actions.jsonl"
