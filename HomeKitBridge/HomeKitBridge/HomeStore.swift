@@ -92,6 +92,7 @@ final class HomeStore: NSObject, HMHomeManagerDelegate, HMHomeDelegate, HMAccess
 
     nonisolated func accessory(_ accessory: HMAccessory, service: HMService, didUpdateValueFor characteristic: HMCharacteristic) {
         Task { @MainActor [self] in
+            History.shared.change(accessory, service, characteristic)
             log("characteristic_change", ["accessory": accessory.name, "service": service.name,
                                           "characteristic": Names.name(for: characteristic.characteristicType),
                                           "value": JSONValue.sanitize(characteristic.value ?? NSNull())])
@@ -104,6 +105,7 @@ final class HomeStore: NSObject, HMHomeManagerDelegate, HMHomeDelegate, HMAccess
         e["time"] = ISO8601DateFormatter().string(from: Date())
         events.append(e)
         if events.count > 500 { events.removeFirst(events.count - 500) }
+        History.shared.mirror(type, e, store: self)
     }
 
     // MARK: resolution
@@ -181,6 +183,20 @@ enum HK {
         }
     }
 
+    /// Like `run`, but gives up after `seconds`: HomeKit sometimes never calls back for unreachable or
+    /// bridged accessories, which would leave a background loop waiting forever.
+    static func runTimed(_ seconds: Double, _ body: (@escaping @Sendable (Error?) -> Void) -> Void) async throws {
+        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+            let once = OnceFlag()
+            body { error in
+                once.run { if let error { c.resume(throwing: error) } else { c.resume() } }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                once.run { c.resume(throwing: BridgeError.message("HomeKit did not answer within \(Int(seconds)) s")) }
+            }
+        }
+    }
+
     static func make<T>(_ body: (@escaping @Sendable (T?, Error?) -> Void) -> Void) async throws -> T {
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<T, Error>) in
             body { value, error in
@@ -189,6 +205,19 @@ enum HK {
                 else { c.resume(throwing: BridgeError.message("HomeKit returned nothing")) }
             }
         }
+    }
+}
+
+/// Runs its closure at most once, from any thread.
+final class OnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    func run(_ body: () -> Void) {
+        lock.lock()
+        let first = !done
+        done = true
+        lock.unlock()
+        if first { body() }
     }
 }
 

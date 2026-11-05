@@ -217,6 +217,8 @@ extension ToolRouter {
                         item["verified"] = Names.same(c.value, v)
                         item["reads"] = JSONValue.sanitize(c.value ?? NSNull())
                     }
+                    // HomeKit does not report this app's own writes back to it; record them for the history.
+                    if let s = c.service, let acc = s.accessory { History.shared.change(acc, s, c) }
                 } catch {
                     item["ok"] = false; item["error"] = "\(error.localizedDescription)"
                 }
@@ -320,7 +322,10 @@ extension ToolRouter {
             guard c.properties.contains(HMCharacteristicPropertyWritable) else { throw BridgeError.message("\(key) is read-only on \(acc.name)") }
             let v = try Names.parse(try a.req("value"), for: c)
             let before = JSONValue.sanitize(c.value ?? NSNull())
-            if !dry { try await HK.run { c.writeValue(v, completionHandler: $0) } }
+            if !dry {
+                try await HK.run { c.writeValue(v, completionHandler: $0) }
+                if let s = c.service { History.shared.change(acc, s, c) }
+            }
             return doneDict(dry, "set \(acc.name) \(key) to \(JSONValue.sanitize(v))", ["previous": before])
         case "snapshot":
             guard let sc = cam.snapshotControl else { throw BridgeError.message("\(acc.name) offers no snapshots") }

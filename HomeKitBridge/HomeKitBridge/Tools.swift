@@ -22,6 +22,7 @@ final class ToolRouter {
             case "homekit_scenes": result = try await scenes(a)
             case "homekit_scene_edit": result = try await sceneEdit(a)
             case "homekit_automations": result = try await automations(a)
+            case "homekit_history": result = try await History.shared.tool(a)
             default: result = try await callMore(name: name, a: a, raw: args)
             }
             if a.isWrite(tool: name) { Audit.write(tool: name, args: args, ok: true, error: nil) }
@@ -184,6 +185,8 @@ final class ToolRouter {
                     out["note"] = "Write accepted but the device reads a different value (it may be off, or rounds values)."
                 }
             }
+            // HomeKit does not report this app's own writes back to it, so record the new value here.
+            History.shared.change(acc, service, c)
             return out
         default:
             throw BridgeError.message("action must be list, search, get or control")
