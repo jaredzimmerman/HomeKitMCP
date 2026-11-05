@@ -128,8 +128,11 @@ final class HTTPServer: @unchecked Sendable {
         }
 
         if Date().timeIntervalSince(windowStart) > 60 { windowStart = Date(); windowCount = 0 }
-        windowCount += 1
-        if windowCount > HTTPServer.perMinute || active >= HTTPServer.maxActive {
+        // Count tool calls only: each connector call also sends initialize and notifications/initialized,
+        // so counting every POST hit the limit after about 40 tool calls a minute.
+        let isToolCall = (try? JSONSerialization.jsonObject(with: req.body) as? [String: Any])?["method"] as? String == "tools/call"
+        if isToolCall { windowCount += 1 }
+        if (isToolCall && windowCount > HTTPServer.perMinute) || active >= HTTPServer.maxActive {
             var r = HTTPResponse.json(429, ["error": "busy"])
             r.headers["Retry-After"] = "2"
             send(conn, r); return
