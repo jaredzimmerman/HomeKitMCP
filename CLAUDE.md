@@ -13,7 +13,12 @@ Project-specific, private details (servers, addresses, team ID, test accessory, 
   - `MCPHandler.swift`: stateless MCP over Streamable HTTP with JSON responses.
   - `HomeStore.swift`: HMHomeManager, name/UUID resolution, event log, `HK.run`/`HK.make`
     completion-handler bridges, `Rollback` (undo steps for multi-step writes).
-  - `Tools.swift`, `ToolDefinitions.swift`: the tools. `Names.swift`: friendly characteristic names.
+  - `Tools.swift`, `ToolDefinitions.swift`: the original tools. `Names.swift`: friendly characteristic names.
+  - `ToolsMore.swift`, `ToolDefinitionsMore.swift`: v2 tools (`homekit_home`, `homekit_devices`,
+    `homekit_cameras`, `homekit_scene_actions`, `homekit_triggers`), reached through `callMore` from
+    `ToolRouter.call`; `ToolRouter.allDefinitions` is what tools/list returns.
+  - `PrivateTools.swift`, `HBSafe.h/.m` (+ bridging header): `private_probe`, `private_homed_db`;
+    Objective-C calls wrapped so exceptions become errors. Never run `private_probe call` for real in tests.
   - `MenuBarProtocol.swift`: `HKBMenuBar`, compiled into both targets.
 - `HomeKitBridge/MenuBarPlugin/`: native AppKit bundle the app loads from PlugIns (Catalyst cannot
   create an NSStatusItem). Owns the menu and keeps the launch scene's window invisible.
@@ -31,6 +36,10 @@ Project-specific, private details (servers, addresses, team ID, test accessory, 
   holds, even on 127.0.0.1, so a shared port broke whenever Tailscale started first.
 - The invisible 1x1 window: with no foreground scene HomeKit refuses every write (HMError 80) while
   reads keep working, so it fails quietly. Do not close or destroy the launch scene.
+- Release builds compile file by file (`SWIFT_COMPILATION_MODE = singlefile`): whole-module optimization
+  stalled for more than 14 minutes on the v2 tool code, while per-file Release builds take about 20 seconds.
+- `requireNotifying`: HomeKit throws an Objective-C exception (killing the app) when an automation event
+  uses a characteristic without change notifications; every event constructor checks first.
 - `.atHome`/`.notAtHome` are aliases of `.firstEntry`/`.lastExit`; never list both in a dictionary
   literal (Swift traps on duplicate keys at runtime).
 

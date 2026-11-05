@@ -42,7 +42,7 @@ final class MCPHandler {
         case "ping":
             return result(id: id, [:])
         case "tools/list":
-            return result(id: id, ["tools": ToolRouter.definitions])
+            return result(id: id, ["tools": ToolRouter.allDefinitions])
         case "tools/call":
             let name = params["name"] as? String ?? ""
             let args = params["arguments"] as? [String: Any] ?? [:]

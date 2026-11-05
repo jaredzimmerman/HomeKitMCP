@@ -23,7 +23,7 @@ from mcp.types import ToolAnnotations
 
 URL = os.environ.get("HOMEKIT_MCP_URL", "")
 TOKEN_FILE = os.environ.get("HOMEKIT_MCP_TOKEN_FILE", "/etc/code-mcp/homekit.token")
-TIMEOUT = 60
+TIMEOUT = 90  # discover can scan for up to 60 s
 
 READ = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 CONTROL = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
@@ -221,11 +221,84 @@ async def homekit_automations(action: Literal["list", "get", "create", "create_t
     return await _call("homekit_automations", locals())
 
 
+# ---------- full public API: home, devices, cameras, scene actions, full automations ----------
+@_tool(EDIT)
+async def homekit_home(action: Literal["info", "users", "manage_users", "rename_home", "add_home", "remove_home",
+                                       "set_primary", "add_accessory", "discover"] = "info",
+                       home_id: str | None = None, name: str | None = None, new_name: str | None = None,
+                       setup_url: str | None = None, seconds: int | None = None, confirm: bool | None = None,
+                       dry_run: bool | None = None):
+    """Home-level settings. info (every home: home hub state, current user and whether they are an administrator, counts), users, manage_users (opens Apple's Manage Users sheet on the Mac for a person to use), rename_home, add_home, remove_home (deletes a whole home; needs confirm=true; preview with dry_run), set_primary (deprecated by Apple), add_accessory (opens Apple's accessory setup on the Mac, macOS 27+, optional setup_url), discover (unpaired accessories nearby for N seconds)."""
+    return await _call("homekit_home", locals())
+
+
+@_tool(CONTROL)
+async def homekit_devices(action: Literal["identify", "unblock", "read", "write_many", "notify", "linked_services", "profiles"],
+                          home_id: str | None = None, accessory_id: str | None = None, characteristic: str | None = None,
+                          service_name: str | None = None, service_id: str | None = None, service_index: int | None = None,
+                          writes: list[SceneRow] | None = None, enable: bool | None = None, verify: bool | None = None,
+                          dry_run: bool | None = None):
+    """Per-accessory operations. identify (blink/beep), unblock, read (live read of one characteristic with metadata), write_many (several writes in one call, each read back; rows {"accessory","property","value", optional "room","service_name","service_id","service_index"}), notify (enable=true/false change notifications so changes show in homekit_events), linked_services, profiles (bridge, Matter node id, network protection, camera, firmware, category)."""
+    return await _call("homekit_devices", locals())
+
+
+@_tool(CONTROL)
+async def homekit_cameras(action: Literal["list", "settings", "set", "snapshot"] = "list", home_id: str | None = None,
+                          accessory_id: str | None = None, setting: str | None = None, value: str | None = None,
+                          image: bool | None = None, dry_run: bool | None = None):
+    """Cameras. list, settings (night_vision, image_rotation, image_mirroring, optical_zoom, digital_zoom, tilt, speaker_mute/volume, microphone_mute/volume, last snapshot time), set (setting + value), snapshot (take a fresh one; image=true adds an experimental JPEG that may be blank). Recording modes and activity zones are not in Apple's public API."""
+    return await _call("homekit_cameras", locals())
+
+
+@_tool(EDIT)
+async def homekit_scene_actions(action: Literal["builtin", "add", "remove"], home_id: str | None = None,
+                                scene: str | None = None, actions: list[SceneRow] | None = None,
+                                accessory: str | None = None, property: str | None = None, dry_run: bool | None = None):
+    """Change a scene without replacing it. builtin (Apple's Wake Up, Sleep, Leave Home and Arrive Home scenes and their actions), add (append actions rows to scene), remove (drop the scene's actions on one accessory, optionally only one property). dry_run previews."""
+    return await _call("homekit_scene_actions", locals())
+
+
+@_tool(EDIT)
+async def homekit_triggers(action: Literal["get", "create_event", "create_timer", "update"],
+                           home_id: str | None = None, id: str | None = None, name: str | None = None,
+                           new_name: str | None = None, events: list[dict[str, Any]] | None = None,
+                           end_events: list[dict[str, Any]] | None = None, conditions: list[dict[str, Any]] | None = None,
+                           time_after: str | None = None, time_before: str | None = None, weekdays: list[int] | None = None,
+                           execute_once: bool | None = None, scene_id: str | None = None, scene_ids: list[str] | None = None,
+                           actions: list[SceneRow] | None = None, add_scenes: list[str] | None = None,
+                           remove_scenes: list[str] | None = None, fire_date: str | None = None,
+                           recurrence: dict[str, Any] | None = None, enabled: bool | None = None,
+                           dry_run: bool | None = None):
+    """Full automations (every trigger type Apple exposes). create_event: events = ANY one fires it; rows {"accessory","characteristic","value"} | {"accessory","characteristic","any_change":true} | {"accessory","characteristic","min","max"} (enters a range) | {"button": accessory, "press": 0/1/2} | {"time": "HH:MM" or "sunset-30"} | {"presence": first_arrives|last_leaves|any_arrives|any_leaves, "who": anyone|me} | {"latitude","longitude","radius_m","on": enter|exit}. end_events turn it back: {"duration_seconds"} and/or characteristic rows. conditions (ALL must hold): {"accessory","property","value","op"} | {"presence": anyone_home|nobody_home|me_home|me_away} | {"any":[...]} | {"all":[...]} | {"not":{...}}; time_after/time_before (windows across midnight work); weekdays 1=Sun..7=Sat; execute_once; scene_ids (several) or scene_id or inline actions. create_timer: fire_date ISO 8601 with zone, recurrence {"every": n, "unit": minute(>=5)|hour|day|week}. update: events, end_events, conditions, time window, weekdays, execute_once, add_scenes, remove_scenes, new_name; timers: fire_date, recurrence. get adds activation state (e.g. disabled_no_home_hub). Enable, disable, rename and delete stay in homekit_automations. dry_run previews."""
+    return await _call("homekit_triggers", locals())
+
+
+# ---------- private (undocumented) HomeKit; may break on any macOS update ----------
+@_tool(EDIT)
+async def private_probe(action: Literal["classes", "describe", "read", "call"] = "describe",
+                        kind: Literal["manager", "home", "accessory", "service", "characteristic", "scene",
+                                      "automation", "room", "zone", "group"] | None = None,
+                        home_id: str | None = None, id: str | None = None, characteristic: str | None = None,
+                        service_id: str | None = None, path: str | None = None, keys: list[str] | None = None,
+                        depth: int | None = None, prefix: str | None = None, selector: str | None = None,
+                        arguments: list[Any] | None = None, confirm: bool | None = None, dry_run: bool | None = None):
+    """Undocumented HomeKit, from class-dumped headers. classes (HomeKit classes loaded), describe (an object's properties and methods), read (curated private properties per kind, or keys you name; path walks properties first, e.g. "settings.rootGroup"), call (invoke a selector; dry_run defaults to true; needs confirm=true; arguments may use "@home", "@accessory:<id>", "@scene:<id>", "@room:<id>", "@automation:<id>"). Missing selectors return errors, never crash. homed refuses most private writes from apps without Apple's own entitlement. Ask the user before any call."""
+    return await _call("private_probe", locals())
+
+
+@_tool(READ)
+async def private_homed_db(action: Literal["tables", "schema", "query", "automation_actions"] = "tables",
+                           table: str | None = None, sql: str | None = None, decode: bool | None = None,
+                           limit: int | None = None):
+    """Read-only view of homed's database on the Mac (~/Library/HomeKit/core.sqlite): what the public API hides, such as the steps of Shortcut-based automations. Needs Full Disk Access for HomeKit Bridge. tables, schema (table), query (one SELECT; property-list blobs decoded), automation_actions (every action row decoded). Can lag the home hub; table names change between macOS versions."""
+    return await _call("private_homed_db", locals())
+
+
 def _audited(fn, audit):
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
-        safe = {k: v for k, v in kwargs.items() if v is not None and k not in ("actions", "conditions", "assignments", "members")}
-        for k in ("actions", "conditions", "assignments", "members"):
+        safe = {k: v for k, v in kwargs.items() if v is not None and k not in ("actions", "conditions", "assignments", "members", "events", "end_events", "writes", "arguments")}
+        for k in ("actions", "conditions", "assignments", "members", "events", "end_events", "writes", "arguments"):
             if kwargs.get(k) is not None:
                 safe[k] = len(kwargs[k])
         audit(fn.__name__, **safe)

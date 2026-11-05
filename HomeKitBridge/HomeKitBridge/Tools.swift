@@ -22,7 +22,7 @@ final class ToolRouter {
             case "homekit_scenes": result = try await scenes(a)
             case "homekit_scene_edit": result = try await sceneEdit(a)
             case "homekit_automations": result = try await automations(a)
-            default: throw BridgeError.message("Unknown tool: \(name)")
+            default: result = try await callMore(name: name, a: a, raw: args)
             }
             if a.isWrite(tool: name) { Audit.write(tool: name, args: args, ok: true, error: nil) }
             return result
@@ -32,9 +32,17 @@ final class ToolRouter {
         }
     }
 
+    /// HomeKit throws an Objective-C exception (which kills the app) when an automation event uses a
+    /// characteristic that does not send change notifications, so check before building one.
+    func requireNotifying(_ c: HMCharacteristic, _ accessoryName: String) throws {
+        guard c.properties.contains(HMCharacteristicPropertySupportsEventNotification) else {
+            throw BridgeError.message("\(Names.name(for: c.characteristicType)) on \(accessoryName) does not send change notifications, so it cannot start or end an automation")
+        }
+    }
+
     // MARK: status, events
 
-    private func status() -> Any {
+    func status() -> Any {
         let homes = store.manager.homes
         return [
             "version": BridgeConfig.version,
@@ -44,7 +52,7 @@ final class ToolRouter {
         ] as [String: Any]
     }
 
-    private func events(_ a: Args) -> Any {
+    func events(_ a: Args) -> Any {
         var list = store.events
         if let type = a.str("type") { list = list.filter { ($0["type"] as? String) == type } }
         if let since = a.str("since") { list = list.filter { (($0["time"] as? String) ?? "") > since } }
@@ -54,7 +62,7 @@ final class ToolRouter {
 
     // MARK: reading
 
-    private func rooms(_ a: Args) throws -> Any {
+    func rooms(_ a: Args) throws -> Any {
         let home = try store.home(a.str("home_id"))
         return (home.rooms + [home.roomForEntireHome()]).map { room in
             ["name": room.name, "id": room.uniqueIdentifier.uuidString,
@@ -62,7 +70,7 @@ final class ToolRouter {
         }
     }
 
-    private func deviceMap(_ a: Args) throws -> Any {
+    func deviceMap(_ a: Args) throws -> Any {
         let home = try store.home(a.str("home_id"))
         let zoneOf: [UUID: [String]] = home.zones.reduce(into: [:]) { acc, z in
             for r in z.rooms { acc[r.uniqueIdentifier, default: []].append(z.name) }
@@ -102,7 +110,7 @@ final class ToolRouter {
         ] as [String: Any]
     }
 
-    private func accessories(_ a: Args) async throws -> Any {
+    func accessories(_ a: Args) async throws -> Any {
         let home = try store.home(a.str("home_id"))
         switch a.str("action") ?? "list" {
         case "list":
@@ -184,7 +192,7 @@ final class ToolRouter {
 
     // MARK: structure
 
-    private func manage(_ a: Args) async throws -> Any {
+    func manage(_ a: Args) async throws -> Any {
         let home = try store.home(a.str("home_id"))
         let dry = a.bool("dry_run") ?? false
         let action = try a.req("action")
@@ -370,7 +378,7 @@ final class ToolRouter {
         }
     }
 
-    private func members(_ a: Args, _ home: HMHome) throws -> [HMService] {
+    func members(_ a: Args, _ home: HMHome) throws -> [HMService] {
         guard let keys = a.strings("members"), !keys.isEmpty else { throw BridgeError.message("members is required") }
         return try keys.map { key -> HMService in
             if let hit = store.service(uuid: key, in: home) { return hit.1 }
@@ -386,7 +394,7 @@ final class ToolRouter {
 
     // MARK: scenes
 
-    private func scenes(_ a: Args) async throws -> Any {
+    func scenes(_ a: Args) async throws -> Any {
         let home = try store.home(a.str("home_id"))
         switch a.str("action") ?? "list" {
         case "list":
@@ -406,7 +414,7 @@ final class ToolRouter {
         }
     }
 
-    private func sceneEdit(_ a: Args) async throws -> Any {
+    func sceneEdit(_ a: Args) async throws -> Any {
         let home = try store.home(a.str("home_id"))
         let dry = a.bool("dry_run") ?? false
         let key = try a.req("scene")
@@ -464,7 +472,7 @@ final class ToolRouter {
         }
     }
 
-    private func writeActions(_ rows: [[String: Any]]?, _ home: HMHome) throws -> [(HMCharacteristicWriteAction<NSCopying>, [String: Any])] {
+    func writeActions(_ rows: [[String: Any]]?, _ home: HMHome) throws -> [(HMCharacteristicWriteAction<NSCopying>, [String: Any])] {
         guard let rows, !rows.isEmpty else { throw BridgeError.message("actions is required") }
         return try rows.map { row -> (HMCharacteristicWriteAction<NSCopying>, [String: Any]) in
             let r = Args(row)
@@ -485,7 +493,7 @@ final class ToolRouter {
 
     // MARK: automations
 
-    private func automations(_ a: Args) async throws -> Any {
+    func automations(_ a: Args) async throws -> Any {
         let home = try store.home(a.str("home_id"))
         let dry = a.bool("dry_run") ?? false
         let action = a.str("action") ?? "list"
@@ -607,7 +615,7 @@ final class ToolRouter {
     }
 
     /// The trigger event for create (button or state change), create_time or create_presence.
-    private func triggerEvent(_ kind: String, _ a: Args, _ home: HMHome) throws -> (HMEvent, String) {
+    func triggerEvent(_ kind: String, _ a: Args, _ home: HMHome) throws -> (HMEvent, String) {
         switch kind {
         case "create_time":
             return try timeEvent(try a.req("time"))
@@ -627,10 +635,12 @@ final class ToolRouter {
             let acc = try store.accessory(try a.req("accessory_id"), in: home)
             if let press = a.int("press_type") {
                 let (_, c) = try findCharacteristic(acc, HMCharacteristicTypeInputEvent, a)
+                try requireNotifying(c, acc.name)
                 return (HMCharacteristicEvent<NSCopying>(characteristic: c, triggerValue: NSNumber(value: press)),
                         "\(acc.name) button press \(press)")
             }
             let (_, c) = try findCharacteristic(acc, try a.req("characteristic"), a)
+            try requireNotifying(c, acc.name)
             let raw = try a.req("trigger_value")
             let v = try Names.parse(raw, for: c)
             return (HMCharacteristicEvent<NSCopying>(characteristic: c, triggerValue: copying(v)),
@@ -638,13 +648,13 @@ final class ToolRouter {
         }
     }
 
-    private func weekdayComponents(_ a: Args) -> [DateComponents]? {
+    func weekdayComponents(_ a: Args) -> [DateComponents]? {
         let days = (a.ints("weekdays") ?? []).filter { (1...7).contains($0) }
         guard !days.isEmpty else { return nil }
         return days.map { var dc = DateComponents(); dc.weekday = $0; return dc }
     }
 
-    private func durationEvents(_ a: Args) throws -> [HMEvent]? {
+    func durationEvents(_ a: Args) throws -> [HMEvent]? {
         guard let secs = a.int("duration_seconds") else { return nil }
         guard (1...86400).contains(secs) else { throw BridgeError.message("duration_seconds must be 1 to 86400") }
         return [HMDurationEvent(duration: TimeInterval(secs))]
@@ -652,7 +662,7 @@ final class ToolRouter {
 
     /// Conditions ANDed with an optional time window. A window that crosses midnight
     /// (22:00 to 06:00, or sunset to sunrise) is the OR of its two ends.
-    private func buildPredicate(_ a: Args, _ home: HMHome) throws -> NSPredicate? {
+    func buildPredicate(_ a: Args, _ home: HMHome) throws -> NSPredicate? {
         var parts: [NSPredicate] = []
         for row in a.dicts("conditions") ?? [] {
             let r = Args(row)
@@ -694,7 +704,7 @@ final class ToolRouter {
         return parts.count == 1 ? parts[0] : NSCompoundPredicate(andPredicateWithSubpredicates: parts)
     }
 
-    private func timePredicate(_ spec: String, after: Bool) throws -> NSPredicate {
+    func timePredicate(_ spec: String, after: Bool) throws -> NSPredicate {
         let (event, _) = try timeEvent(spec)
         if let sig = event as? HMSignificantTimeEvent {
             return after ? HMEventTrigger.predicateForEvaluatingTriggerOccurring(afterSignificantEvent: sig)
@@ -705,7 +715,7 @@ final class ToolRouter {
                      : HMEventTrigger.predicateForEvaluatingTrigger(occurringBefore: dc)
     }
 
-    private func crossesMidnight(_ after: String, _ before: String) -> Bool {
+    func crossesMidnight(_ after: String, _ before: String) -> Bool {
         let a = after.lowercased(), b = before.lowercased()
         if a.hasPrefix("sunset") && b.hasPrefix("sunrise") { return true }
         func minutes(_ s: String) -> Int? {
@@ -718,7 +728,7 @@ final class ToolRouter {
         return false
     }
 
-    private func timeEvent(_ spec: String) throws -> (HMEvent, String) {
+    func timeEvent(_ spec: String) throws -> (HMEvent, String) {
         let s = spec.lowercased().replacingOccurrences(of: " ", with: "")
         for (word, sig) in [("sunrise", HMSignificantEvent.sunrise), ("sunset", HMSignificantEvent.sunset)] where s.hasPrefix(word) {
             let rest = s.dropFirst(word.count)
@@ -737,7 +747,7 @@ final class ToolRouter {
         return (HMCalendarEvent(fire: dc), String(format: "%02d:%02d", h, m))
     }
 
-    private func triggerDict(_ t: HMTrigger, detail: Bool) -> [String: Any] {
+    func triggerDict(_ t: HMTrigger, detail: Bool) -> [String: Any] {
         var d: [String: Any] = ["name": t.name, "id": t.uniqueIdentifier.uuidString, "enabled": t.isEnabled,
                                 "last_fired": t.lastFireDate as Any, "scenes": t.actionSets.map(\.name)]
         if let e = t as? HMEventTrigger {
@@ -757,7 +767,7 @@ final class ToolRouter {
         return d
     }
 
-    private func describe(_ e: HMEvent) -> String {
+    func describe(_ e: HMEvent) -> String {
         if let c = e as? HMCharacteristicEvent<NSCopying> {
             let acc = c.characteristic.service?.accessory?.name ?? "?"
             return "\(acc) \(Names.name(for: c.characteristic.characteristicType)) = \(JSONValue.sanitize(c.triggerValue ?? NSNull()))"
@@ -783,13 +793,13 @@ final class ToolRouter {
 
     // MARK: helpers
 
-    private func summary(_ acc: HMAccessory) -> [String: Any] {
+    func summary(_ acc: HMAccessory) -> [String: Any] {
         ["name": acc.name, "id": acc.uniqueIdentifier.uuidString, "room": acc.room?.name as Any,
          "category": acc.category.localizedDescription, "reachable": acc.isReachable,
          "state": userServices(acc).map { "\($0.name): \(stateSummary($0))" }]
     }
 
-    private func serviceDetail(_ s: HMService) -> [String: Any] {
+    func serviceDetail(_ s: HMService) -> [String: Any] {
         var d: [String: Any] = [
             "name": s.name, "id": s.uniqueIdentifier.uuidString, "type": Names.serviceName(for: s.serviceType),
             "type_uuid": s.serviceType, "primary": s.isPrimaryService, "user_interactive": s.isUserInteractive,
@@ -802,7 +812,7 @@ final class ToolRouter {
         return d
     }
 
-    private func characteristicDetail(_ c: HMCharacteristic) -> [String: Any] {
+    func characteristicDetail(_ c: HMCharacteristic) -> [String: Any] {
         var d: [String: Any] = [
             "name": Names.name(for: c.characteristicType), "type": c.characteristicType,
             "description": c.localizedDescription, "value": JSONValue.sanitize(c.value ?? NSNull()),
@@ -821,16 +831,16 @@ final class ToolRouter {
         return d
     }
 
-    private func userServices(_ acc: HMAccessory) -> [HMService] {
+    func userServices(_ acc: HMAccessory) -> [HMService] {
         acc.services.filter { $0.serviceType != HMServiceTypeAccessoryInformation && $0.isUserInteractive }
     }
 
-    private func isWritable(_ c: HMCharacteristic) -> Bool {
+    func isWritable(_ c: HMCharacteristic) -> Bool {
         c.properties.contains(HMCharacteristicPropertyWritable) && c.characteristicType != HMCharacteristicTypeIdentify
             && c.characteristicType != HMCharacteristicTypeName
     }
 
-    private func stateSummary(_ s: HMService) -> String {
+    func stateSummary(_ s: HMService) -> String {
         let interesting = s.characteristics.filter {
             $0.properties.contains(HMCharacteristicPropertyReadable) && $0.characteristicType != HMCharacteristicTypeName
                 && Names.characteristics[$0.characteristicType] != nil
@@ -839,7 +849,7 @@ final class ToolRouter {
             .joined(separator: ", ")
     }
 
-    private func sceneType(_ s: HMActionSet) -> String {
+    func sceneType(_ s: HMActionSet) -> String {
         switch s.actionSetType {
         case HMActionSetTypeWakeUp: return "wake_up"
         case HMActionSetTypeSleep: return "sleep"
@@ -850,7 +860,7 @@ final class ToolRouter {
         }
     }
 
-    private func actionRow(_ action: HMAction) -> [String: Any]? {
+    func actionRow(_ action: HMAction) -> [String: Any]? {
         guard let w = action as? HMCharacteristicWriteAction<NSCopying> else { return nil }
         let c = w.characteristic
         return ["accessory": c.service?.accessory?.name ?? "?", "accessory_id": c.service?.accessory?.uniqueIdentifier.uuidString ?? "",
@@ -858,7 +868,7 @@ final class ToolRouter {
                 "value": JSONValue.sanitize(w.targetValue)]
     }
 
-    private func pickService(_ acc: HMAccessory, _ a: Args, prefer: [String] = []) throws -> HMService {
+    func pickService(_ acc: HMAccessory, _ a: Args, prefer: [String] = []) throws -> HMService {
         var list = acc.services
         if let id = a.str("service_id") ?? a.str("service_name").flatMap({ UUID(uuidString: $0) != nil ? $0 : nil }) {
             list = list.filter { $0.uniqueIdentifier.uuidString.caseInsensitiveCompare(id) == .orderedSame }
@@ -881,7 +891,7 @@ final class ToolRouter {
     }
 
     /// Finds a characteristic by friendly name or type UUID, narrowed by service selectors.
-    private func findCharacteristic(_ acc: HMAccessory, _ key: String, _ a: Args) throws -> (HMService, HMCharacteristic) {
+    func findCharacteristic(_ acc: HMAccessory, _ key: String, _ a: Args) throws -> (HMService, HMCharacteristic) {
         let type = Names.characteristicType(for: key)
         var services = acc.services
         if a.hasServiceSelector { services = [try pickService(acc, a)] }
@@ -897,7 +907,7 @@ final class ToolRouter {
         return first
     }
 
-    private func copying(_ v: Any) -> NSCopying {
+    func copying(_ v: Any) -> NSCopying {
         if let n = v as? NSNumber { return n }
         if let s = v as? String { return s as NSString }
         if let d = v as? Data { return d as NSData }

@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B7A1C0DE0000000000000038 /* ToolsMore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000032 /* ToolsMore.swift */; };
+		B7A1C0DE0000000000000039 /* ToolDefinitionsMore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000033 /* ToolDefinitionsMore.swift */; };
+		B7A1C0DE000000000000003A /* PrivateTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000034 /* PrivateTools.swift */; };
+		B7A1C0DE000000000000003B /* HBSafe.m in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000035 /* HBSafe.m */; };
 		B7A1C0DE0000000000000024 /* MenuBarProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */; };
 		B7A1C0DE0000000000000025 /* MenuBarProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */; };
 		B7A1C0DE0000000000000026 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000021 /* StatusBarController.swift */; };
@@ -45,6 +49,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B7A1C0DE0000000000000032 /* ToolsMore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ToolsMore.swift"; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000033 /* ToolDefinitionsMore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ToolDefinitionsMore.swift"; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000034 /* PrivateTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PrivateTools.swift"; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000035 /* HBSafe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "HBSafe.m"; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000036 /* HBSafe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "HBSafe.h"; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000037 /* HomeKitBridge-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "HomeKitBridge-Bridging-Header.h"; sourceTree = "<group>"; };
 		B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarProtocol.swift; sourceTree = "<group>"; };
 		B7A1C0DE0000000000000021 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
 		B7A1C0DE0000000000000022 /* MenuBarPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MenuBarPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -106,6 +116,12 @@
 				B7A1C0DE0000000000000016 /* Tools.swift */,
 				B7A1C0DE0000000000000017 /* ToolDefinitions.swift */,
 				B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */,
+				B7A1C0DE0000000000000032 /* ToolsMore.swift */,
+				B7A1C0DE0000000000000033 /* ToolDefinitionsMore.swift */,
+				B7A1C0DE0000000000000034 /* PrivateTools.swift */,
+				B7A1C0DE0000000000000035 /* HBSafe.m */,
+				B7A1C0DE0000000000000036 /* HBSafe.h */,
+				B7A1C0DE0000000000000037 /* HomeKitBridge-Bridging-Header.h */,
 				B7A1C0DE0000000000000007 /* HomeKitBridge.entitlements */,
 			);
 			path = HomeKitBridge;
@@ -227,6 +243,10 @@
 				B7A1C0DE000000000000001D /* Tools.swift in Sources */,
 				B7A1C0DE000000000000001E /* ToolDefinitions.swift in Sources */,
 				B7A1C0DE0000000000000024 /* MenuBarProtocol.swift in Sources */,
+				B7A1C0DE0000000000000038 /* ToolsMore.swift in Sources */,
+				B7A1C0DE0000000000000039 /* ToolDefinitionsMore.swift in Sources */,
+				B7A1C0DE000000000000003A /* PrivateTools.swift in Sources */,
+				B7A1C0DE000000000000003B /* HBSafe.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -284,7 +304,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -303,6 +323,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "HomeKit Bridge";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "HomeKit Bridge creates location-based automations for your home.";
+				SWIFT_OBJC_BRIDGING_HEADER = "HomeKitBridge/HomeKitBridge-Bridging-Header.h";
 				INFOPLIST_KEY_NSHomeKitUsageDescription = "HomeKit Bridge reads and edits your Home so Claude can manage it for you.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -332,6 +354,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "HomeKit Bridge";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "HomeKit Bridge creates location-based automations for your home.";
+				SWIFT_OBJC_BRIDGING_HEADER = "HomeKitBridge/HomeKitBridge-Bridging-Header.h";
 				INFOPLIST_KEY_NSHomeKitUsageDescription = "HomeKit Bridge reads and edits your Home so Claude can manage it for you.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

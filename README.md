@@ -25,9 +25,15 @@ claude.ai ──> your FastMCP server (OAuth) ──> vps/homekit_tools.py
 | `homekit_manage` | Rename accessories or single services, Display As, move accessories between rooms, rooms, zones, accessory groups, remove accessory |
 | `homekit_scenes`, `homekit_scene_edit` | List, get, trigger; create, update, rename, delete |
 | `homekit_automations` | List, get, create (button or state change), create_time, create_presence, edit, enable, disable, rename, delete; conditions (including presence), time windows (across midnight too), weekdays, auto turn-back |
+| `homekit_home` | Home info (hub state, current user), users, rename home, add/remove home, primary home, add accessory (Apple's setup sheet). `discover` is not available on Mac |
+| `homekit_devices` | Identify (blink), unblock, read one characteristic, `write_many` (validated as a batch before anything is written), change notifications, linked services, profiles |
+| `homekit_cameras` | List, settings HomeKit exposes (for example microphone mute and volume), snapshot (capture date, or the JPEG with `image=true`) |
+| `homekit_scene_actions` | Built-in scenes (Good Morning and friends), add or remove single actions in a scene |
+| `homekit_triggers` | Full automations: several events (value, any change, range, button, time, sun, presence, location), end events, nested any/all/not conditions, execute once, several scenes; timer automations with recurrence; update in place |
+| `private_probe`, `private_homed_db` | Optional, undocumented HomeKit: see below |
 
 Every write takes `dry_run`. Changes that need several HomeKit calls roll back the earlier steps if a
-later one fails, and say what was put back. Writes are logged to
+later one fails, and say what was put back. [COVERAGE.md](COVERAGE.md) maps each HomeKit API to its tool. Writes are logged to
 `~/Library/Logs/homekit-bridge/actions.jsonl`.
 
 Not reachable through Apple's public API: HomePod and Apple TV settings, Home app favorites, camera
@@ -102,11 +108,30 @@ Local MCP clients on the Mac can skip the server and call `http://127.0.0.1:1876
 - Host header check (localhost, 127.0.0.1, 100.x, `*.ts.net`), 1 MB body cap, 120 requests a minute.
 - Every write supports `dry_run`; every write is logged on the Mac and, through `audit`, on the server.
 
+## Undocumented (private) HomeKit layer
+
+Two tools reach past Apple's public API. Both are read-only unless you explicitly ask otherwise:
+
+- `private_probe` lists HomeKit classes, describes objects, and reads declared properties. Its `call`
+  action can invoke an arbitrary HomeKit selector, but it is a dry run unless you pass both
+  `dry_run=false` and `confirm=true`, and homed rejects most private writes from apps without Apple's
+  private entitlement.
+- `private_homed_db` reads HomeKit's own database (read-only SQLite) for things the public API hides,
+  such as Shortcut steps in automations. It only works after you give HomeKit Bridge **Full Disk
+  Access** (System Settings > Privacy & Security). That grants the app read access to all your files,
+  and the app is reachable from your tailnet with its token, so grant it only if you need this tool.
+
+Nothing here needs, or should ever involve, turning off SIP, AMFI or other system protections.
+
 ## Notes and limits
 
 - HomeKit refuses writes from a Catalyst app with no foreground scene ("Handler does not support
   background access"), so the app keeps an invisible, click-through 1x1 window instead of none.
   Writes while the screen is locked or the display is asleep have not been verified.
+- HomeKit does not report an app's own writes back to it, so change notifications (`notify`) show up
+  in `homekit_events` only for changes made elsewhere (the Home app, a switch, an automation).
+- `activation_state` on automations is not a reliable on/off signal from a Mac (enabled automations
+  can report `disabled`); use `enabled`.
 - The app listens on 18767 rather than 8767 because Network.framework cannot listen on a port that
   `tailscale serve` already holds on the tailnet addresses.
 
