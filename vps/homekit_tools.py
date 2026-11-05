@@ -294,6 +294,25 @@ async def private_homed_db(action: Literal["tables", "schema", "query", "automat
     return await _call("private_homed_db", locals())
 
 
+# ---------- history (recorded on the Mac by the bridge) ----------
+@_tool(CONTROL)
+async def homekit_history(action: Literal["status", "devices", "query", "events", "summary", "sql",
+                                          "pause", "resume", "snapshot_now", "notify_now"] = "status",
+                          home_id: str | None = None, room: str | None = None, zone: str | None = None,
+                          accessory_id: str | None = None, accessories: list[str] | None = None,
+                          service_name: str | None = None, characteristic: str | None = None,
+                          characteristics: list[str] | None = None, since: str | None = None,
+                          until: str | None = None,
+                          kind: Literal["occupancy", "on_times", "levels", "activity", "co_changes",
+                                        "automations"] | None = None,
+                          type: str | None = None, name: str | None = None, changes_only: bool | None = None,
+                          window_seconds: int | None = None, limit: int | None = None, sql: str | None = None):
+    """Long-term HomeKit history recorded by the bridge on the Mac: every change of every notifying characteristic (lights, brightness, color, motion, occupancy, light level, contact, temperature, humidity, outlets, switches, buttons...), including changes the bridge itself made, plus 15-minute snapshots and scene runs (automation runs cannot be recorded on a Mac). Read-only except pause/resume/snapshot_now/notify_now.
+    Actions: status (size, counts, per-home recording health), devices (what is tracked, change counts), query (raw readings, newest first; changes_only defaults to true), events (scene_ran, scene_triggered, reachability_change, homes_updated, accessory_controlled, bridge_started), summary (kind: occupancy, on_times, levels, activity, co_changes, automations), sql (one read-only SELECT/WITH/EXPLAIN on tables chars, readings, events, meta and view readings_named; readings.t is unix seconds; src 0 change, 1 snapshot, 2 refresh; queries stop after 15 s).
+    Filters: home_id, room, zone, accessory_id or accessories (names or UUIDs), service_name, characteristic or characteristics (friendly names such as power, brightness, motion_detected, occupancy_detected, current_light_level). Times: ISO 8601, YYYY-MM-DD, or relative 30m/12h/7d/4w (since defaults: query 24h, devices/events 7d, summary 14d). limit: default 500, max 5000 (co_changes default 50); window_seconds: co_changes pairing window (default 60). Homes without a reachable home hub record nothing."""
+    return await _call("homekit_history", locals())
+
+
 def _audited(fn, audit):
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
