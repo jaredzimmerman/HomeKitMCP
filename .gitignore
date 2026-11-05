@@ -1,0 +1,13 @@
+# build output
+build/
+DerivedData/
+build-*.log
+*.xcuserstate
+xcuserdata/
+.DS_Store
+
+# private, machine-specific (never publish)
+CLAUDE.local.md
+mac/config.local.sh
+vps/config.local.sh
+.ladder/

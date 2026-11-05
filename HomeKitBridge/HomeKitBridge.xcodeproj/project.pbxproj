@@ -1,0 +1,424 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B7A1C0DE0000000000000024 /* MenuBarProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */; };
+		B7A1C0DE0000000000000025 /* MenuBarProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */; };
+		B7A1C0DE0000000000000026 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000021 /* StatusBarController.swift */; };
+		B7A1C0DE0000000000000027 /* MenuBarPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000022 /* MenuBarPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B7A1C0DE0000000000000018 /* HomeKitBridgeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000011 /* HomeKitBridgeApp.swift */; };
+		B7A1C0DE0000000000000019 /* HTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000012 /* HTTPServer.swift */; };
+		B7A1C0DE000000000000001A /* MCPHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000013 /* MCPHandler.swift */; };
+		B7A1C0DE000000000000001B /* HomeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000014 /* HomeStore.swift */; };
+		B7A1C0DE000000000000001C /* Names.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000015 /* Names.swift */; };
+		B7A1C0DE000000000000001D /* Tools.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000016 /* Tools.swift */; };
+		B7A1C0DE000000000000001E /* ToolDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE0000000000000017 /* ToolDefinitions.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B7A1C0DE0000000000000030 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B7A1C0DE0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B7A1C0DE0000000000000029;
+			remoteInfo = MenuBarPlugin;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B7A1C0DE0000000000000028 /* Embed PlugIns */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B7A1C0DE0000000000000027 /* MenuBarPlugin.bundle in Embed PlugIns */,
+			);
+			name = "Embed PlugIns";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarProtocol.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000021 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000022 /* MenuBarPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MenuBarPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7A1C0DE0000000000000006 /* HomeKitBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HomeKitBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7A1C0DE0000000000000011 /* HomeKitBridgeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeKitBridgeApp.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000012 /* HTTPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPServer.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000013 /* MCPHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPHandler.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000014 /* HomeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeStore.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000015 /* Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Names.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000016 /* Tools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tools.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000017 /* ToolDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolDefinitions.swift; sourceTree = "<group>"; };
+		B7A1C0DE0000000000000007 /* HomeKitBridge.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HomeKitBridge.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B7A1C0DE000000000000002B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7A1C0DE0000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B7A1C0DE0000000000000003 = {
+			isa = PBXGroup;
+			children = (
+				B7A1C0DE0000000000000004 /* HomeKitBridge */,
+				B7A1C0DE0000000000000023 /* MenuBarPlugin */,
+				B7A1C0DE0000000000000005 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B7A1C0DE0000000000000005 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B7A1C0DE0000000000000006 /* HomeKitBridge.app */,
+				B7A1C0DE0000000000000022 /* MenuBarPlugin.bundle */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B7A1C0DE0000000000000004 /* HomeKitBridge */ = {
+			isa = PBXGroup;
+			children = (
+				B7A1C0DE0000000000000011 /* HomeKitBridgeApp.swift */,
+				B7A1C0DE0000000000000012 /* HTTPServer.swift */,
+				B7A1C0DE0000000000000013 /* MCPHandler.swift */,
+				B7A1C0DE0000000000000014 /* HomeStore.swift */,
+				B7A1C0DE0000000000000015 /* Names.swift */,
+				B7A1C0DE0000000000000016 /* Tools.swift */,
+				B7A1C0DE0000000000000017 /* ToolDefinitions.swift */,
+				B7A1C0DE0000000000000020 /* MenuBarProtocol.swift */,
+				B7A1C0DE0000000000000007 /* HomeKitBridge.entitlements */,
+			);
+			path = HomeKitBridge;
+			sourceTree = "<group>";
+		};
+		B7A1C0DE0000000000000023 /* MenuBarPlugin */ = {
+			isa = PBXGroup;
+			children = (
+				B7A1C0DE0000000000000021 /* StatusBarController.swift */,
+			);
+			path = MenuBarPlugin;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B7A1C0DE0000000000000002 /* HomeKitBridge */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B7A1C0DE000000000000000C /* Build configuration list for PBXNativeTarget "HomeKitBridge" */;
+			buildPhases = (
+				B7A1C0DE0000000000000008 /* Sources */,
+				B7A1C0DE0000000000000009 /* Frameworks */,
+				B7A1C0DE000000000000000A /* Resources */,
+				B7A1C0DE0000000000000028 /* Embed PlugIns */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B7A1C0DE0000000000000031 /* PBXTargetDependency */,
+			);
+			name = HomeKitBridge;
+			productName = HomeKitBridge;
+			productReference = B7A1C0DE0000000000000006 /* HomeKitBridge.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B7A1C0DE0000000000000029 /* MenuBarPlugin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B7A1C0DE000000000000002D /* Build configuration list for PBXNativeTarget "MenuBarPlugin" */;
+			buildPhases = (
+				B7A1C0DE000000000000002A /* Sources */,
+				B7A1C0DE000000000000002B /* Frameworks */,
+				B7A1C0DE000000000000002C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MenuBarPlugin;
+			productName = MenuBarPlugin;
+			productReference = B7A1C0DE0000000000000022 /* MenuBarPlugin.bundle */;
+			productType = "com.apple.product-type.bundle";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B7A1C0DE0000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					B7A1C0DE0000000000000002 = {
+						CreatedOnToolsVersion = 16.0;
+						SystemCapabilities = {
+							com.apple.HomeKit = {
+								enabled = 1;
+							};
+						};
+					};
+				};
+			};
+			buildConfigurationList = B7A1C0DE000000000000000B /* Build configuration list for PBXProject "HomeKitBridge" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B7A1C0DE0000000000000003;
+			productRefGroup = B7A1C0DE0000000000000005 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B7A1C0DE0000000000000002 /* HomeKitBridge */,
+				B7A1C0DE0000000000000029 /* MenuBarPlugin */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B7A1C0DE000000000000002C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7A1C0DE000000000000000A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B7A1C0DE0000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7A1C0DE0000000000000018 /* HomeKitBridgeApp.swift in Sources */,
+				B7A1C0DE0000000000000019 /* HTTPServer.swift in Sources */,
+				B7A1C0DE000000000000001A /* MCPHandler.swift in Sources */,
+				B7A1C0DE000000000000001B /* HomeStore.swift in Sources */,
+				B7A1C0DE000000000000001C /* Names.swift in Sources */,
+				B7A1C0DE000000000000001D /* Tools.swift in Sources */,
+				B7A1C0DE000000000000001E /* ToolDefinitions.swift in Sources */,
+				B7A1C0DE0000000000000024 /* MenuBarProtocol.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7A1C0DE000000000000002A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7A1C0DE0000000000000025 /* MenuBarProtocol.swift in Sources */,
+				B7A1C0DE0000000000000026 /* StatusBarController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B7A1C0DE0000000000000031 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = maccatalyst;
+			target = B7A1C0DE0000000000000029 /* MenuBarPlugin */;
+			targetProxy = B7A1C0DE0000000000000030 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B7A1C0DE000000000000000D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B7A1C0DE000000000000000E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B7A1C0DE000000000000000F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = HomeKitBridge/HomeKitBridge.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "HomeKit Bridge";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHomeKitUsageDescription = "HomeKit Bridge reads and edits your Home so Claude can manage it for you.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.indigokarasu.HomeKitBridge;
+				PRODUCT_NAME = HomeKitBridge;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B7A1C0DE0000000000000010 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = HomeKitBridge/HomeKitBridge.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "HomeKit Bridge";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHomeKitUsageDescription = "HomeKit Bridge reads and edits your Home so Claude can manage it for you.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.indigokarasu.HomeKitBridge;
+				PRODUCT_NAME = HomeKitBridge;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		B7A1C0DE000000000000002E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPrincipalClass = HKBStatusBarController;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.indigokarasu.HomeKitBridge.MenuBarPlugin;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = bundle;
+			};
+			name = Debug;
+		};
+		B7A1C0DE000000000000002F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPrincipalClass = HKBStatusBarController;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.indigokarasu.HomeKitBridge.MenuBarPlugin;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = bundle;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B7A1C0DE000000000000000B /* Build configuration list for PBXProject "HomeKitBridge" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7A1C0DE000000000000000D /* Debug */,
+				B7A1C0DE000000000000000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B7A1C0DE000000000000000C /* Build configuration list for PBXNativeTarget "HomeKitBridge" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7A1C0DE000000000000000F /* Debug */,
+				B7A1C0DE0000000000000010 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B7A1C0DE000000000000002D /* Build configuration list for PBXNativeTarget "MenuBarPlugin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7A1C0DE000000000000002E /* Debug */,
+				B7A1C0DE000000000000002F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B7A1C0DE0000000000000001 /* Project object */;
+}
