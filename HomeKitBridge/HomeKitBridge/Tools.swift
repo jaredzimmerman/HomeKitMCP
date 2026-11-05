@@ -186,7 +186,7 @@ final class ToolRouter {
                 }
             }
             // HomeKit does not report this app's own writes back to it, so record the new value here.
-            History.shared.change(acc, service, c)
+            History.shared.change(acc, service, c, byBridge: true)
             return out
         default:
             throw BridgeError.message("action must be list, search, get or control")

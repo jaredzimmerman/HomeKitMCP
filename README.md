@@ -114,10 +114,16 @@ Local MCP clients on the Mac can skip the server and call `http://127.0.0.1:1876
 From 2.1 the bridge records every readable characteristic that sends change notifications, on every
 home, into `~/Library/Application Support/homekit-bridge/history.sqlite`, so usage can be studied later
 (for example to propose scenes and automations). It records changes as they happen (including the
-bridge's own writes, which HomeKit does not report back), a snapshot every 15 minutes, a re-read of
-mains-powered accessories every hour, and scene runs. Its only HomeKit write is switching change
-notifications on. Retention is unlimited: plan on a few GB a year for a home of about 170 accessories;
-`homekit_history status` shows the size. The `sql` action accepts one SELECT, WITH or EXPLAIN statement
+bridge's own writes, which HomeKit does not report back), every 15 minutes a snapshot of the values
+that differ from their last saved row, a full snapshot every 6 hours, a re-read of mains-powered
+accessories every hour, and scene runs. Its only HomeKit write is switching change notifications on.
+
+Noisy sensors are throttled when saved, always against the last saved value: CO2 on a move of 25 ppm,
+light level on a 10% move (at least 1 lux), temperature on 0.2 °C, humidity on 1%. Air quality, ozone,
+NO2, SO2, PM2.5, PM10 and VOC readings are saved only once a new value has held for 60 seconds (stamped
+with the time it first appeared). Motion, occupancy, contact, power, brightness, color, outlets,
+switches, buttons and the bridge's own writes are never throttled. `homekit_history status` shows how
+many changes were skipped. Retention is unlimited; `homekit_history status` shows the size. The `sql` action accepts one SELECT, WITH or EXPLAIN statement
 and stops any query after 15 seconds. Homes without a reachable home hub record nothing, and automation
 runs are not recorded on a Mac (HMTrigger.lastFireDate is no longer supported there).
 
