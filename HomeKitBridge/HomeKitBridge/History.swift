@@ -9,8 +9,13 @@ import SQLite3
 /// - readings: every change HomeKit reports for every readable, notifying characteristic
 ///   (lights on/off, brightness, color, motion, occupancy, light level, contact, temperature,
 ///   humidity, outlets, switches, buttons, locks' state, fans, blinds, sensors' status...),
-///   deduplicated, plus a snapshot of all of them every 15 minutes and an hourly re-read of
-///   mains-powered accessories to catch anything a notification missed.
+///   deduplicated, plus an hourly re-read of mains-powered accessories to catch anything a
+///   notification missed. Noisy sensors are throttled at save time (HistoryConst.saveRules):
+///   CO2, light level, temperature and humidity are saved only on a meaningful move from the last
+///   saved value, air quality and particulates only once a new value has held for 60 s. Changes the
+///   bridge makes itself and button presses are never throttled.
+/// - snapshots every 15 minutes of values that differ from their last saved row, and a full
+///   snapshot of everything every 6 hours.
 /// - events: automation runs and scene runs (from lastFireDate / lastExecutionDate), reachability
 ///   changes, accessories added or removed, and the bridge's own control actions.
 ///
@@ -222,6 +227,45 @@ enum HistoryConst {
         c.characteristicType.uppercased() == inputEvent
     }
 
+    /// How a change of a noisy sensor is saved. Only the types listed in saveRules are throttled;
+    /// everything else (motion, occupancy, contact, power, brightness, color, outlets, switches,
+    /// buttons...) is saved on every change.
+    enum SaveRule {
+        case delta(Double)                      // move of at least this much from the last saved value
+        case relative(Double, minimum: Double)  // move of at least this fraction of it, and at least `minimum`
+        case hold(TimeInterval)                 // a new value that stays this long
+    }
+
+    static let saveRules: [String: SaveRule] = {
+        var r: [String: SaveRule] = [
+            "00000093" + suffix: .delta(25),                    // carbon dioxide level, ppm
+            "0000006B" + suffix: .relative(0.10, minimum: 1),   // current light level, lux
+            "00000011" + suffix: .delta(0.2),                   // current temperature, C
+            "00000010" + suffix: .delta(1),                     // current relative humidity, %
+        ]
+        // Air quality, ozone, NO2, SO2, PM2.5, PM10, VOC density.
+        for t in ["00000095", "000000C3", "000000C4", "000000C5", "000000C6", "000000C7", "000000C8"] {
+            r[t + suffix] = .hold(60)
+        }
+        return r
+    }()
+
+    static func saveRule(_ c: HMCharacteristic) -> SaveRule? {
+        saveRules[c.characteristicType.uppercased()]
+    }
+
+    /// Whether a numeric move from `last` to `now` is big enough to save under a delta rule.
+    static func moved(_ rule: SaveRule, from last: (Double?, String?), to now: (Double?, String?)) -> Bool {
+        guard let a = last.0, let b = now.0 else { return last.0 != now.0 || last.1 != now.1 }
+        let step: Double
+        switch rule {
+        case .delta(let d): step = d
+        case .relative(let f, let minimum): step = max(abs(a) * f, minimum)
+        case .hold: return a != b
+        }
+        return abs(b - a) >= step - 1e-6   // 21.2 - 21.0 is 0.1999... in binary
+    }
+
     static func hasBattery(_ a: HMAccessory) -> Bool {
         a.services.contains { $0.serviceType.uppercased() == batteryService }
     }
@@ -261,7 +305,12 @@ final class History {
     private var paused = false
 
     private var cids: [UUID: Int64] = [:]                 // characteristic uuid -> chars.id
-    private var lastValue: [Int64: (Double?, String?)] = [:]
+    private var lastValue: [Int64: (Double?, String?)] = [:]   // last saved row per characteristic
+    private var primed = false                            // lastValue seeded from the database
+    private struct Held { var v: Double?; var s: String?; var since: Date; var seconds: TimeInterval }
+    private var held: [Int64: Held] = [:]                 // hold-rule values waiting to prove they stay
+    private var suppressed = 0                            // throttled changes not saved since launch
+    private var heldSaved = 0                             // held values saved since launch
     private var lastFire: [UUID: Date] = [:]
     private var lastSceneRun: [UUID: Date] = [:]
     private var firesPrimed = false
@@ -273,6 +322,9 @@ final class History {
     private var refreshRunning = false
 
     private(set) var lastSnapshot: Date?
+    private(set) var lastFullSnapshot: Date?
+    private var lastSnapshotRows = 0
+    private var fullKnown = false                         // lastFullSnapshot read from meta
     private(set) var lastRefresh: Date?
     private(set) var lastNotifyPass: Date?
     private var notifyEnabled = 0
@@ -281,6 +333,7 @@ final class History {
     private var lastChangeAt: [String: Date] = [:]        // home name -> last change recorded
 
     static let snapshotMinutes = 15
+    static let fullSnapshotHours = 6
     static let refreshMinutes = 60
     static let notifyMinutes = 30
 
@@ -308,6 +361,11 @@ final class History {
             guard let self else { return }
             let p = try? await db.read { HistoryDB.scalar($0, "SELECT v FROM meta WHERE k='paused'") as? String }
             self.paused = (p ?? nil) == "1"
+            let f = try? await db.read { HistoryDB.scalar($0, "SELECT v FROM meta WHERE k='last_full_snapshot'") as? String }
+            if let t = (f ?? nil).flatMap(Double.init), self.lastFullSnapshot == nil {
+                self.lastFullSnapshot = Date(timeIntervalSince1970: t)
+            }
+            self.fullKnown = true
             self.event(type: "bridge_started", home: nil, name: BridgeConfig.version, id: nil, detail: nil)
             self.syncCharacteristics()
             self.primeLastValues()
@@ -329,6 +387,7 @@ final class History {
         guard db != nil else { return }
         tickCount += 1
         pollFires()
+        saveHeld(now: Date())
         if tickCount % History.snapshotMinutes == 0 { snapshot() }
         if tickCount % History.notifyMinutes == 0 { Task { await enableNotifications(only: nil) } }
         if tickCount % History.refreshMinutes == 7 { Task { await refresh() } }
@@ -337,12 +396,57 @@ final class History {
 
     // MARK: hooks from HomeStore
 
-    /// Every characteristic change HomeKit reports to the bridge.
-    func change(_ accessory: HMAccessory, _ service: HMService, _ c: HMCharacteristic) {
+    /// Every characteristic change HomeKit reports to the bridge, and (byBridge) the bridge's own writes,
+    /// which HomeKit does not report back. Own writes are never throttled.
+    func change(_ accessory: HMAccessory, _ service: HMService, _ c: HMCharacteristic, byBridge: Bool = false) {
         guard db != nil, !paused, HistoryConst.trackable(c) else { return }
         let home = homeName(of: accessory)
-        record(c, accessory: accessory, service: service, home: home, src: 0, force: HistoryConst.isInputEvent(c))
         if let home { lastChangeAt[home] = Date() }
+        if !byBridge, let rule = HistoryConst.saveRule(c) {
+            throttled(c, rule, accessory: accessory, service: service, home: home)
+            return
+        }
+        record(c, accessory: accessory, service: service, home: home, src: 0, force: HistoryConst.isInputEvent(c))
+    }
+
+    /// Save-time throttling for noisy sensors: compares with the last saved value, not the last seen one,
+    /// so a slow drift is saved once it adds up to a full step.
+    private func throttled(_ c: HMCharacteristic, _ rule: HistoryConst.SaveRule, accessory: HMAccessory,
+                           service: HMService, home: String?) {
+        // Until the last saved values are loaded there is nothing to compare with; the next snapshot
+        // records whatever this change was.
+        guard primed else { suppressed += 1; return }
+        let now = HistoryConst.encode(c.value)
+        if now.0 == nil && now.1 == nil { return }
+        guard let cid = cids[c.uniqueIdentifier] else {
+            // New accessory not synced yet: save its first value (record upserts the metadata).
+            record(c, accessory: accessory, service: service, home: home, src: 0)
+            return
+        }
+        let last = lastValue[cid]
+        switch rule {
+        case .hold(let seconds):
+            if let last, last.0 == now.0, last.1 == now.1 {
+                // Back to the saved value before the new one held.
+                if held.removeValue(forKey: cid) != nil { suppressed += 1 }
+                return
+            }
+            if let p = held[cid], p.v == now.0, p.s == now.1 { return }   // same value, keep its clock
+            if held[cid] != nil { suppressed += 1 }                         // replaced before it held
+            held[cid] = Held(v: now.0, s: now.1, since: Date(), seconds: seconds)
+        case .delta, .relative:
+            if let last, !HistoryConst.moved(rule, from: last, to: now) { suppressed += 1; return }
+            save(cid, now, src: 0, at: Date())
+        }
+    }
+
+    /// Saves hold-rule values that have stayed long enough, stamped with the time they first appeared.
+    private func saveHeld(now: Date) {
+        guard !paused else { return }
+        for (cid, p) in held where now.timeIntervalSince(p.since) >= p.seconds {
+            save(cid, (p.v, p.s), src: 0, at: p.since)
+            heldSaved += 1
+        }
     }
 
     /// Mirrors HomeStore.log events into the database and reacts to home reloads.
@@ -384,8 +488,7 @@ final class History {
         let t = at.timeIntervalSince1970
         if let cid = cids[key] {
             if src == 0 && !force, let last = lastValue[cid], last.0 == v, last.1 == s { return }
-            lastValue[cid] = (v, s)
-            db.write { _ = HistoryDB.run($0, "INSERT INTO readings(t,cid,v,s,src) VALUES(?,?,?,?,?)", [t, cid, v, s, src]) }
+            save(cid, (v, s), src: src, at: at)
         } else {
             // Not synced yet (new accessory): upsert its metadata first, then the reading.
             let meta = describe(c, accessory: accessory, service: service, home: home)
@@ -397,6 +500,16 @@ final class History {
                 Task { @MainActor in self?.cids[key] = cid; self?.lastValue[cid] = (v, s) }
             }
         }
+    }
+
+    /// One reading row; the saved value becomes the base for throttling and snapshot dedup.
+    private func save(_ cid: Int64, _ value: (Double?, String?), src: Int, at: Date) {
+        guard let db else { return }
+        lastValue[cid] = value
+        held[cid] = nil
+        let t = at.timeIntervalSince1970
+        let (v, s) = value
+        db.write { _ = HistoryDB.run($0, "INSERT INTO readings(t,cid,v,s,src) VALUES(?,?,?,?,?)", [t, cid, v, s, src]) }
     }
 
     private func event(type: String, home: String?, name: String?, id: String?, detail: [String: Any]?) {
@@ -467,36 +580,51 @@ final class History {
         }
     }
 
-    /// Loads each characteristic's last stored value so a restart doesn't log duplicates.
+    /// Loads each characteristic's last saved value so a restart neither logs duplicates nor resets the
+    /// throttling base. One index seek per characteristic, so it stays fast as the table grows.
     private func primeLastValues() {
-        db?.write { [weak self] h in
+        guard let db else { primed = true; return }
+        db.write { [weak self] h in
             let rows = (try? HistoryDB.rows(h, """
-                SELECT r.cid, r.v, r.s FROM readings r
-                JOIN (SELECT cid, max(t) AS mt FROM readings GROUP BY cid) m ON m.cid = r.cid AND m.mt = r.t
-                """)) ?? []
+                SELECT r.cid, r.v, r.s FROM chars c
+                JOIN readings r ON r.rowid = (SELECT rowid FROM readings WHERE cid = c.id ORDER BY t DESC LIMIT 1)
+                """, seconds: 60)) ?? []
             var map: [Int64: (Double?, String?)] = [:]
             for r in rows {
                 guard let cid = r["cid"] as? Int64 else { continue }
                 map[cid] = ((r["v"] as? Double) ?? (r["v"] as? Int64).map(Double.init), r["s"] as? String)
             }
             Task { @MainActor in
-                for (k, v) in map where self?.lastValue[k] == nil { self?.lastValue[k] = v }
+                guard let self else { return }
+                for (k, v) in map where self.lastValue[k] == nil { self.lastValue[k] = v }
+                self.primed = true
             }
         }
     }
 
-    /// Cached values of everything tracked on reachable accessories (input events excluded).
-    private func snapshot() {
+    /// Cached values of everything tracked on reachable accessories (input events excluded). A regular
+    /// snapshot writes only values that differ from their last saved row and skips values still waiting
+    /// out a hold; a full one (every 6 hours, and snapshot_now) writes everything.
+    private func snapshot(full force: Bool = false) {
         guard let db, !paused else { return }
         let now = Date()
+        // Until the saved values and the last full snapshot time are loaded, a dedup pass can't tell what
+        // changed, so write everything.
+        let due = lastFullSnapshot.map { now.timeIntervalSince($0) >= Double(History.fullSnapshotHours) * 3600 - 60 } ?? true
+        let full = force || !primed || !fullKnown || due
         var rows: [(Int64, Double?, String?)] = []
         var missing = false
         for (_, a, _, c) in tracked() where a.isReachable && !HistoryConst.isInputEvent(c) {
             guard let cid = cids[c.uniqueIdentifier] else { missing = true; continue }
             let (v, s) = HistoryConst.encode(c.value)
             if v == nil && s == nil { continue }
+            if !full {
+                if held[cid] != nil { continue }
+                if let last = lastValue[cid], last.0 == v, last.1 == s { continue }
+            }
             rows.append((cid, v, s))
             lastValue[cid] = (v, s)
+            held[cid] = nil
         }
         if missing { scheduleSync() }
         let t = now.timeIntervalSince1970
@@ -504,9 +632,12 @@ final class History {
             HistoryDB.exec(h, "BEGIN")
             for r in rows { HistoryDB.run(h, "INSERT INTO readings(t,cid,v,s,src) VALUES(?,?,?,?,1)", [t, r.0, r.1, r.2]) }
             HistoryDB.run(h, "INSERT OR REPLACE INTO meta(k,v) VALUES('last_snapshot',?)", [String(t)])
+            if full { HistoryDB.run(h, "INSERT OR REPLACE INTO meta(k,v) VALUES('last_full_snapshot',?)", [String(t)]) }
             HistoryDB.exec(h, "COMMIT")
         }
         lastSnapshot = now
+        if full { lastFullSnapshot = now }
+        lastSnapshotRows = rows.count
     }
 
     /// Re-reads mains-powered accessories to catch changes a notification missed.
@@ -519,7 +650,9 @@ final class History {
         for (h, a, s, c) in items {
             do { try await HK.runTimed(20) { c.readValue(completionHandler: $0) } } catch { continue }
             let after = HistoryConst.encode(c.value)
-            let known = cids[c.uniqueIdentifier].flatMap { lastValue[$0] }
+            let cid = cids[c.uniqueIdentifier]
+            if let cid, held[cid] != nil { continue }   // a held value is saved once it has stayed
+            let known = cid.flatMap { lastValue[$0] }
             if let known, known.0 == after.0, known.1 == after.1 { continue }
             record(c, accessory: a, service: s, home: h.name, src: 2)
         }
@@ -606,13 +739,14 @@ final class History {
             return try await db.read { try HistoryDB.rows($0, sql, [], limit: limit, readOnly: true) }
         case "pause", "resume":
             paused = action == "pause"
+            if paused { held.removeAll() }
             let v = paused ? "1" : "0"
             db.write { _ = HistoryDB.run($0, "INSERT OR REPLACE INTO meta(k,v) VALUES('paused',?)", [v]) }
             event(type: action == "pause" ? "history_paused" : "history_resumed", home: nil, name: nil, id: nil, detail: nil)
             return ["recording": !paused]
         case "snapshot_now":
-            snapshot()
-            return ["done": "snapshot written", "at": ISO8601DateFormatter().string(from: Date())]
+            snapshot(full: true)
+            return ["done": "full snapshot written", "rows": lastSnapshotRows, "at": ISO8601DateFormatter().string(from: Date())]
         case "notify_now":
             await enableNotifications(only: nil)
             return ["enabled": notifyEnabled, "failed": notifyFailed, "failures": notifyFailures]
@@ -658,8 +792,12 @@ final class History {
         out["notifications"] = ["enabled": notifyEnabled, "failed": notifyFailed, "last_pass": iso(lastNotifyPass),
                                 "failures": notifyFailures] as [String: Any]
         out["last_snapshot"] = iso(lastSnapshot)
+        out["last_snapshot_rows"] = lastSnapshotRows
+        out["last_full_snapshot"] = iso(lastFullSnapshot)
         out["last_refresh"] = iso(lastRefresh)
-        out["schedule"] = "changes as they happen; snapshot every \(History.snapshotMinutes) min; re-read mains-powered every \(History.refreshMinutes) min; notifications re-enabled every \(History.notifyMinutes) min"
+        out["throttle"] = ["suppressed_changes": suppressed, "held_saved": heldSaved, "held_waiting": held.count,
+                           "rules": "CO2 25 ppm; light level 10% (min 1 lux); temperature 0.2 C; humidity 1%; air quality, ozone, NO2, SO2, PM2.5, PM10, VOC held 60 s; nothing else throttled; own writes never"] as [String: Any]
+        out["schedule"] = "changes as they happen (noisy sensors throttled); snapshot of changed values every \(History.snapshotMinutes) min, full snapshot every \(History.fullSnapshotHours) h; re-read mains-powered every \(History.refreshMinutes) min; notifications re-enabled every \(History.notifyMinutes) min"
         return out
     }
 
@@ -993,7 +1131,7 @@ final class History {
             "limit": num("Row cap (default 500, max 5000; co_changes default 50)"),
             "sql": str("sql: one read-only statement"),
         ]
-        let desc = "Long-term HomeKit history recorded by the bridge on the Mac: every change of every notifying characteristic (lights, brightness, color, motion, occupancy, light level, contact, temperature, humidity, outlets, switches, buttons...) plus 15-minute snapshots and scene runs (automation runs cannot be recorded on a Mac). Read-only except pause/resume/snapshot_now/notify_now. Actions: status (size, counts, per-home recording health), devices (what is tracked, change counts), query (raw readings, newest first), events (automation_ran, scene_ran, scene_triggered, reachability_change, homes_updated, accessory_controlled, bridge_started), summary (kind: occupancy, on_times, levels, activity, co_changes, automations), sql (one read-only SELECT on tables chars, readings, events, meta and view readings_named; readings.t is unix seconds; src 0 change, 1 snapshot, 2 refresh). Times: ISO 8601, YYYY-MM-DD, or relative 30m/12h/7d/4w."
+        let desc = "Long-term HomeKit history recorded by the bridge on the Mac: every change of every notifying characteristic (lights, brightness, color, motion, occupancy, light level, contact, temperature, humidity, outlets, switches, buttons...; CO2, light level, temperature and humidity saved on meaningful moves, air quality and particulates once a value holds 60 s) plus 15-minute snapshots of changed values, a full snapshot every 6 hours, and scene runs (automation runs cannot be recorded on a Mac). Read-only except pause/resume/snapshot_now/notify_now. Actions: status (size, counts, per-home recording health), devices (what is tracked, change counts), query (raw readings, newest first), events (automation_ran, scene_ran, scene_triggered, reachability_change, homes_updated, accessory_controlled, bridge_started), summary (kind: occupancy, on_times, levels, activity, co_changes, automations), sql (one read-only SELECT on tables chars, readings, events, meta and view readings_named; readings.t is unix seconds; src 0 change, 1 snapshot, 2 refresh). Times: ISO 8601, YYYY-MM-DD, or relative 30m/12h/7d/4w."
         let schema: [String: Any] = ["type": "object", "properties": props]
         return [["name": "homekit_history", "description": desc, "inputSchema": schema]]
     }

@@ -218,7 +218,7 @@ extension ToolRouter {
                         item["reads"] = JSONValue.sanitize(c.value ?? NSNull())
                     }
                     // HomeKit does not report this app's own writes back to it; record them for the history.
-                    if let s = c.service, let acc = s.accessory { History.shared.change(acc, s, c) }
+                    if let s = c.service, let acc = s.accessory { History.shared.change(acc, s, c, byBridge: true) }
                 } catch {
                     item["ok"] = false; item["error"] = "\(error.localizedDescription)"
                 }
@@ -324,7 +324,7 @@ extension ToolRouter {
             let before = JSONValue.sanitize(c.value ?? NSNull())
             if !dry {
                 try await HK.run { c.writeValue(v, completionHandler: $0) }
-                if let s = c.service { History.shared.change(acc, s, c) }
+                if let s = c.service { History.shared.change(acc, s, c, byBridge: true) }
             }
             return doneDict(dry, "set \(acc.name) \(key) to \(JSONValue.sanitize(v))", ["previous": before])
         case "snapshot":

@@ -19,7 +19,9 @@ Project-specific, private details (servers, addresses, team ID, test accessory, 
     `ToolRouter.call`; `ToolRouter.allDefinitions` is what tools/list returns.
   - `History.swift`: `homekit_history` and the background logger (SQLite in Application Support), hooked
     from `HomeStore` (characteristic changes, `log` mirror) and from the write paths (HomeKit does not
-    report the app's own writes). Background HomeKit calls use `HK.runTimed` so they cannot hang forever.
+    report the app's own writes; those call `change(..., byBridge: true)` and are never throttled). Noisy sensors
+  are throttled at save time by `HistoryConst.saveRules`, compared with the last saved value (`lastValue`,
+  seeded from the database on launch). Background HomeKit calls use `HK.runTimed` so they cannot hang forever.
   - `PrivateTools.swift`, `HBSafe.h/.m` (+ bridging header): `private_probe`, `private_homed_db`;
     Objective-C calls wrapped so exceptions become errors. Never run `private_probe call` for real in tests.
   - `MenuBarProtocol.swift`: `HKBMenuBar`, compiled into both targets.
