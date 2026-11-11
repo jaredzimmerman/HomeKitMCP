@@ -12,7 +12,9 @@ import SQLite3
 ///   deduplicated, plus an hourly re-read of mains-powered accessories to catch anything a
 ///   notification missed. Noisy sensors are throttled at save time (HistoryConst.saveRules):
 ///   CO2, light level, temperature and humidity are saved only on a meaningful move from the last
-///   saved value, air quality and particulates only once a new value has held for 60 s. Changes the
+///   saved value, and at most once a minute (a newer value waits and is saved when the minute is up,
+///   so a sensor flapping between two readings cannot flood the log); air quality and particulates
+///   only once a new value has held for 60 s. Changes the
 ///   bridge makes itself and button presses are never throttled.
 /// - snapshots every 15 minutes of values that differ from their last saved row, and a full
 ///   snapshot of everything every 6 hours.
@@ -54,6 +56,7 @@ final class HistoryDB: @unchecked Sendable {
     CREATE TABLE IF NOT EXISTS readings(t REAL NOT NULL, cid INTEGER NOT NULL, v REAL, s TEXT, src INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS readings_t ON readings(t);
     CREATE INDEX IF NOT EXISTS readings_cid_t ON readings(cid, t);
+    CREATE INDEX IF NOT EXISTS readings_src_t ON readings(src, t);
     CREATE TABLE IF NOT EXISTS events(t REAL NOT NULL, home TEXT, type TEXT NOT NULL, name TEXT, object_id TEXT, detail TEXT);
     CREATE INDEX IF NOT EXISTS events_t ON events(t);
     CREATE INDEX IF NOT EXISTS events_type_t ON events(type, t);
@@ -236,6 +239,9 @@ enum HistoryConst {
         case hold(TimeInterval)                 // a new value that stays this long
     }
 
+    /// Delta and relative rules save at most one change row per characteristic in this many seconds.
+    static let minimumGap: TimeInterval = 60
+
     static let saveRules: [String: SaveRule] = {
         var r: [String: SaveRule] = [
             "00000093" + suffix: .delta(25),                    // carbon dioxide level, ppm
@@ -307,8 +313,11 @@ final class History {
     private var cids: [UUID: Int64] = [:]                 // characteristic uuid -> chars.id
     private var lastValue: [Int64: (Double?, String?)] = [:]   // last saved row per characteristic
     private var primed = false                            // lastValue seeded from the database
-    private struct Held { var v: Double?; var s: String?; var since: Date; var seconds: TimeInterval }
-    private var held: [Int64: Held] = [:]                 // hold-rule values waiting to prove they stay
+    /// A value waiting to be saved: hold-rule values until they have stayed, delta/relative values until
+    /// the minimum gap since the last saved row is up. Saved at `due`, stamped with `since`.
+    private struct Held { var v: Double?; var s: String?; var since: Date; var due: Date }
+    private var held: [Int64: Held] = [:]                 // values waiting to be saved
+    private var lastSavedAt: [Int64: Date] = [:]          // time of the last saved row per characteristic
     private var suppressed = 0                            // throttled changes not saved since launch
     private var heldSaved = 0                             // held values saved since launch
     private var lastFire: [UUID: Date] = [:]
@@ -433,17 +442,30 @@ final class History {
             }
             if let p = held[cid], p.v == now.0, p.s == now.1 { return }   // same value, keep its clock
             if held[cid] != nil { suppressed += 1 }                         // replaced before it held
-            held[cid] = Held(v: now.0, s: now.1, since: Date(), seconds: seconds)
+            let t = Date()
+            held[cid] = Held(v: now.0, s: now.1, since: t, due: t.addingTimeInterval(seconds))
         case .delta, .relative:
-            if let last, !HistoryConst.moved(rule, from: last, to: now) { suppressed += 1; return }
-            save(cid, now, src: 0, at: Date())
+            if let last, !HistoryConst.moved(rule, from: last, to: now) {
+                // Back within a step of the saved value: a waiting value is no longer a move.
+                held[cid] = nil
+                suppressed += 1
+                return
+            }
+            let t = Date()
+            if let saved = lastSavedAt[cid], t.timeIntervalSince(saved) < HistoryConst.minimumGap {
+                // Too soon after the last saved row: keep the newest value and save it when the gap is up.
+                if held[cid] != nil { suppressed += 1 }
+                held[cid] = Held(v: now.0, s: now.1, since: t, due: saved.addingTimeInterval(HistoryConst.minimumGap))
+                return
+            }
+            save(cid, now, src: 0, at: t)
         }
     }
 
-    /// Saves hold-rule values that have stayed long enough, stamped with the time they first appeared.
+    /// Saves waiting values that are due, stamped with the time they appeared.
     private func saveHeld(now: Date) {
         guard !paused else { return }
-        for (cid, p) in held where now.timeIntervalSince(p.since) >= p.seconds {
+        for (cid, p) in held where now >= p.due {
             save(cid, (p.v, p.s), src: 0, at: p.since)
             heldSaved += 1
         }
@@ -506,6 +528,7 @@ final class History {
     private func save(_ cid: Int64, _ value: (Double?, String?), src: Int, at: Date) {
         guard let db else { return }
         lastValue[cid] = value
+        lastSavedAt[cid] = at
         held[cid] = nil
         let t = at.timeIntervalSince1970
         let (v, s) = value
@@ -586,17 +609,22 @@ final class History {
         guard let db else { primed = true; return }
         db.write { [weak self] h in
             let rows = (try? HistoryDB.rows(h, """
-                SELECT r.cid, r.v, r.s FROM chars c
+                SELECT r.cid, r.v, r.s, r.t FROM chars c
                 JOIN readings r ON r.rowid = (SELECT rowid FROM readings WHERE cid = c.id ORDER BY t DESC LIMIT 1)
                 """, seconds: 60)) ?? []
             var map: [Int64: (Double?, String?)] = [:]
+            var times: [Int64: Date] = [:]
             for r in rows {
                 guard let cid = r["cid"] as? Int64 else { continue }
                 map[cid] = ((r["v"] as? Double) ?? (r["v"] as? Int64).map(Double.init), r["s"] as? String)
+                if let t = (r["t"] as? Double) ?? (r["t"] as? Int64).map(Double.init) {
+                    times[cid] = Date(timeIntervalSince1970: t)
+                }
             }
             Task { @MainActor in
                 guard let self else { return }
                 for (k, v) in map where self.lastValue[k] == nil { self.lastValue[k] = v }
+                for (k, t) in times where self.lastSavedAt[k] == nil { self.lastSavedAt[k] = t }
                 self.primed = true
             }
         }
@@ -624,6 +652,7 @@ final class History {
             }
             rows.append((cid, v, s))
             lastValue[cid] = (v, s)
+            lastSavedAt[cid] = now
             held[cid] = nil
         }
         if missing { scheduleSync() }
@@ -796,7 +825,7 @@ final class History {
         out["last_full_snapshot"] = iso(lastFullSnapshot)
         out["last_refresh"] = iso(lastRefresh)
         out["throttle"] = ["suppressed_changes": suppressed, "held_saved": heldSaved, "held_waiting": held.count,
-                           "rules": "CO2 25 ppm; light level 10% (min 1 lux); temperature 0.2 C; humidity 1%; air quality, ozone, NO2, SO2, PM2.5, PM10, VOC held 60 s; nothing else throttled; own writes never"] as [String: Any]
+                           "rules": "CO2 25 ppm; light level 10% (min 1 lux); temperature 0.2 C; humidity 1% (these at most one row a minute); air quality, ozone, NO2, SO2, PM2.5, PM10, VOC held 60 s; nothing else throttled; own writes never"] as [String: Any]
         out["schedule"] = "changes as they happen (noisy sensors throttled); snapshot of changed values every \(History.snapshotMinutes) min, full snapshot every \(History.fullSnapshotHours) h; re-read mains-powered every \(History.refreshMinutes) min; notifications re-enabled every \(History.notifyMinutes) min"
         return out
     }
