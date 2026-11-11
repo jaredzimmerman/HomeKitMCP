@@ -144,6 +144,15 @@ final class HomeStore: NSObject, HMHomeManagerDelegate, HMHomeDelegate, HMAccess
         return try pick(all, key, kind: "room", id: \.uniqueIdentifier, name: \.name)
     }
 
+    /// Whether any room matches `key` by UUID or name (so callers can create a missing room without
+    /// mistaking an ambiguous name for a missing one).
+    func roomExists(_ key: String, in home: HMHome) -> Bool {
+        (home.rooms + [home.roomForEntireHome()]).contains {
+            $0.uniqueIdentifier.uuidString.caseInsensitiveCompare(key) == .orderedSame
+                || $0.name.caseInsensitiveCompare(key) == .orderedSame
+        }
+    }
+
     func zone(_ key: String, in home: HMHome) throws -> HMZone {
         try pick(home.zones, key, kind: "zone", id: \.uniqueIdentifier, name: \.name)
     }
@@ -175,36 +184,54 @@ final class HomeStore: NSObject, HMHomeManagerDelegate, HMHomeDelegate, HMAccess
 
 @MainActor
 enum HK {
-    static func run(_ body: (@escaping @Sendable (Error?) -> Void) -> Void) async throws {
-        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-            body { error in
-                if let error { c.resume(throwing: error) } else { c.resume() }
-            }
-        }
-    }
+    /// Default wait for a HomeKit completion handler. HomeKit sometimes never calls back for unreachable or
+    /// bridged accessories; without a deadline the request (and its server slot) would wait forever.
+    static let defaultTimeout: Double = 30
 
-    /// Like `run`, but gives up after `seconds`: HomeKit sometimes never calls back for unreachable or
-    /// bridged accessories, which would leave a background loop waiting forever.
-    static func runTimed(_ seconds: Double, _ body: (@escaping @Sendable (Error?) -> Void) -> Void) async throws {
+    /// Bridges a completion-handler call. Gives up after `timeout` seconds (nil waits indefinitely, for
+    /// calls that show an Apple sheet and wait for a person). A late callback after the deadline is ignored;
+    /// the change it reports may still have happened.
+    static func run(timeout: Double? = defaultTimeout,
+                    _ body: (@escaping @Sendable (Error?) -> Void) -> Void) async throws {
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
             let once = OnceFlag()
             body { error in
                 once.run { if let error { c.resume(throwing: error) } else { c.resume() } }
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
-                once.run { c.resume(throwing: BridgeError.message("HomeKit did not answer within \(Int(seconds)) s")) }
+            if let timeout {
+                DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+                    once.run { c.resume(throwing: HK.timedOut(timeout)) }
+                }
             }
         }
     }
 
-    static func make<T>(_ body: (@escaping @Sendable (T?, Error?) -> Void) -> Void) async throws -> T {
+    /// Kept for the background logger; same as `run(timeout:)`.
+    static func runTimed(_ seconds: Double, _ body: (@escaping @Sendable (Error?) -> Void) -> Void) async throws {
+        try await run(timeout: seconds, body)
+    }
+
+    static func make<T>(timeout: Double? = defaultTimeout,
+                        _ body: (@escaping @Sendable (T?, Error?) -> Void) -> Void) async throws -> T {
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<T, Error>) in
+            let once = OnceFlag()
             body { value, error in
-                if let error { c.resume(throwing: error) }
-                else if let value { c.resume(returning: value) }
-                else { c.resume(throwing: BridgeError.message("HomeKit returned nothing")) }
+                once.run {
+                    if let error { c.resume(throwing: error) }
+                    else if let value { c.resume(returning: value) }
+                    else { c.resume(throwing: BridgeError.message("HomeKit returned nothing")) }
+                }
+            }
+            if let timeout {
+                DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+                    once.run { c.resume(throwing: HK.timedOut(timeout)) }
+                }
             }
         }
+    }
+
+    nonisolated static func timedOut(_ seconds: Double) -> Error {
+        BridgeError.message("HomeKit did not answer within \(Int(seconds)) s (the accessory may be unreachable; the change may still apply)")
     }
 }
 
@@ -250,6 +277,9 @@ final class Rollback {
         var message = "\(error)"
         if !undone.isEmpty { message += " Rolled back: \(Rollback.summarize(undone))." }
         if !failed.isEmpty { message += " Could not undo: \(failed.joined(separator: "; ")); check the Home app." }
+        if "\(error)".contains("did not answer within") {
+            message += " The step that timed out may still finish later; check the Home app for a leftover."
+        }
         return BridgeError.message(message)
     }
 

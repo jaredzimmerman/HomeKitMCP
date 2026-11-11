@@ -164,10 +164,14 @@ final class ToolRouter {
             guard acc.isReachable else { throw BridgeError.message("\(acc.name) is not reachable") }
             let value = try Names.parse(raw, for: c)
             let before = JSONValue.sanitize(c.value ?? NSNull())
+            let sensitive = Sensitive.names([c])
             if a.bool("dry_run") == true {
-                return ["dry_run": true, "accessory": acc.name, "service": service.name,
-                        "characteristic": Names.name(for: c.characteristicType), "current": before, "new": JSONValue.sanitize(value)] as [String: Any]
+                var out: [String: Any] = ["dry_run": true, "accessory": acc.name, "service": service.name,
+                        "characteristic": Names.name(for: c.characteristicType), "current": before, "new": JSONValue.sanitize(value)]
+                if !sensitive.isEmpty { out["needs_confirm"] = Sensitive.note }
+                return out
             }
+            try Sensitive.require(sensitive, a)
             try await HK.run { c.writeValue(value, completionHandler: $0) }
             store.log("accessory_controlled", ["accessory": acc.name, "service": service.name,
                                                "characteristic": Names.name(for: c.characteristicType), "value": raw])
@@ -262,7 +266,8 @@ final class ToolRouter {
                         throw BridgeError.message("each assignment needs uuid or accessory")
                     }
                     let acc = try store.accessory(key, in: home)
-                    var room = try? store.room(roomName, in: home)
+                    // Create the room only when no room has that name; an ambiguous name is an error.
+                    var room: HMRoom? = store.roomExists(roomName, in: home) ? try store.room(roomName, in: home) : nil
                     var created = false
                     if room == nil {
                         created = true
@@ -409,7 +414,14 @@ final class ToolRouter {
                     "last_run": s.lastExecutionDate as Any, "actions": s.actions.compactMap(actionRow)] as [String: Any]
         case "trigger":
             let s = try store.scene(try a.req("scene_id"), in: home)
-            try await HK.run { home.executeActionSet(s, completionHandler: $0) }
+            let sensitive = Sensitive.names(sets: [s])
+            if a.bool("dry_run") == true {
+                var out: [String: Any] = ["dry_run": true, "would": "run scene \(s.name)", "actions": s.actions.compactMap(actionRow)]
+                if !sensitive.isEmpty { out["needs_confirm"] = Sensitive.note }
+                return out
+            }
+            try Sensitive.require(sensitive, a)
+            try await HK.run(timeout: 60) { home.executeActionSet(s, completionHandler: $0) }
             store.log("scene_triggered", ["scene": s.name])
             return ["ok": true, "scene": s.name] as [String: Any]
         default:
@@ -424,7 +436,9 @@ final class ToolRouter {
         switch try a.req("action") {
         case "create":
             let writes = try writeActions(a.dicts("actions"), home)
-            if dry { return ["dry_run": true, "would": "create scene \(key)", "actions": writes.map(\.1)] as [String: Any] }
+            let sensitive = Sensitive.names(writes.map(\.0.characteristic))
+            if dry { return Sensitive.flag(["dry_run": true, "would": "create scene \(key)", "actions": writes.map(\.1)], sensitive) }
+            try Sensitive.require(sensitive, a)
             let set: HMActionSet = try await HK.make { home.addActionSet(withName: key, completionHandler: $0) }
             let undo = Rollback()
             undo.add("removed new scene \(key)") { try await HK.run { home.removeActionSet(set, completionHandler: $0) } }
@@ -437,7 +451,9 @@ final class ToolRouter {
         case "update":
             let set = try store.scene(key, in: home)
             let writes = try writeActions(a.dicts("actions"), home)
-            if dry { return ["dry_run": true, "would": "replace the actions of \(set.name)", "before": set.actions.compactMap(actionRow), "after": writes.map(\.1)] as [String: Any] }
+            let sensitive = Sensitive.names(writes.map(\.0.characteristic))
+            if dry { return Sensitive.flag(["dry_run": true, "would": "replace the actions of \(set.name)", "before": set.actions.compactMap(actionRow), "after": writes.map(\.1)], sensitive) }
+            try Sensitive.require(sensitive, a)
             // HomeKit allows one action per characteristic in a scene, so the old actions go first;
             // if any new one is refused, the new ones come out and the old ones are recreated.
             let undo = Rollback()
@@ -507,8 +523,11 @@ final class ToolRouter {
             return triggerDict(try store.trigger(try a.req("id"), in: home), detail: true)
         case "enable", "disable":
             let t = try store.trigger(try a.req("id"), in: home)
-            if !dry { try await HK.run { t.enable(action == "enable", completionHandler: $0) } }
-            return [dry ? "would" : "done": "\(action) \(t.name)"]
+            let sensitive = action == "enable" ? Sensitive.names(sets: t.actionSets) : []
+            if dry { return Sensitive.flag(["would": "\(action) \(t.name)"], sensitive) }
+            try Sensitive.require(sensitive, a)
+            try await HK.run { t.enable(action == "enable", completionHandler: $0) }
+            return ["done": "\(action) \(t.name)"]
         case "rename":
             let t = try store.trigger(try a.req("id"), in: home)
             let n = try a.req("new_name")
@@ -528,12 +547,14 @@ final class ToolRouter {
             var writes: [(HMCharacteristicWriteAction<NSCopying>, [String: Any])] = []
             if let sceneKey = a.str("scene_id") { scene = try store.scene(sceneKey, in: home) }
             else { writes = try writeActions(a.dicts("actions"), home) }
+            let sensitive = scene.map { Sensitive.names(sets: [$0]) } ?? Sensitive.names(writes.map(\.0.characteristic))
             if dry {
-                return ["dry_run": true, "would": "create automation \(name): when \(describe)",
+                return Sensitive.flag(["dry_run": true, "would": "create automation \(name): when \(describe)",
                         "only_if": predicate?.predicateFormat ?? "always", "auto_revert_seconds": a.int("duration_seconds") as Any,
                         "runs": scene?.name ?? "new scene \(name)", "actions": writes.map(\.1),
-                        "weekdays": a.ints("weekdays") ?? []] as [String: Any]
+                        "weekdays": a.ints("weekdays") ?? []], sensitive)
             }
+            try Sensitive.require(sensitive, a)
             let undo = Rollback()
             do {
                 if scene == nil {
@@ -919,6 +940,47 @@ final class ToolRouter {
 }
 
 // MARK: - arguments
+
+/// Locks, garage doors and security systems: writes to them (directly, or through a scene or an
+/// automation that runs one) need confirm=true, so a client cannot open a door by accident.
+@MainActor
+enum Sensitive {
+    static let types: Set<String> = Set([
+        HMCharacteristicTypeTargetLockMechanismState,
+        HMCharacteristicTypeTargetDoorState,
+        HMCharacteristicTypeTargetSecuritySystemState,
+    ].map { $0.uppercased() })
+
+    static let note = "Changes a lock, garage door or security system: the real call needs confirm=true."
+
+    /// "Front Door / Lock Mechanism" for each sensitive characteristic, without duplicates.
+    static func names(_ chars: [HMCharacteristic]) -> [String] {
+        var seen = Set<String>(), out: [String] = []
+        for c in chars where types.contains(c.characteristicType.uppercased()) {
+            let label = [c.service?.accessory?.name, c.service?.name].compactMap { $0 }.joined(separator: " / ")
+            if seen.insert(label).inserted { out.append(label) }
+        }
+        return out
+    }
+
+    static func names(sets: [HMActionSet]) -> [String] {
+        names(sets.flatMap { $0.actions.compactMap { ($0 as? HMCharacteristicWriteAction<NSCopying>)?.characteristic } })
+    }
+
+    static func require(_ found: [String], _ a: Args) throws {
+        guard !found.isEmpty, a.bool("confirm") != true else { return }
+        throw BridgeError.message("This changes a lock, garage door or security system (\(found.joined(separator: ", "))). Confirm with the person, then repeat the call with confirm=true.")
+    }
+
+    /// Adds needs_confirm to a dry-run result when it touches something sensitive.
+    static func flag(_ d: [String: Any], _ found: [String]) -> [String: Any] {
+        guard !found.isEmpty else { return d }
+        var d = d
+        d["needs_confirm"] = note
+        d["sensitive"] = found
+        return d
+    }
+}
 
 struct Args {
     var values: [String: Any]

@@ -93,7 +93,7 @@ extension ToolRouter {
         case "manage_users":
             let h = try store.home(a.str("home_id"))
             if dry { return doneDict(true, "open Apple's Manage Users sheet for \(h.name) on the Mac") }
-            try await HK.run { h.manageUsers(completionHandler: $0) }
+            try await HK.run(timeout: nil) { h.manageUsers(completionHandler: $0) }
             return ["ok": true, "note": "Apple's sheet was shown on the Mac; changes are made there by a person."] as [String: Any]
         case "rename_home":
             let h = try store.home(a.str("home_id"))
@@ -204,6 +204,8 @@ extension ToolRouter {
                                        "property": Names.name(for: c.characteristicType),
                                        "previous": JSONValue.sanitize(c.value ?? NSNull()), "value": JSONValue.sanitize(v)]))
             }
+            let sensitive = Sensitive.names(planned.compactMap(\.c))
+            if !dry { try Sensitive.require(sensitive, a) }
             var out: [[String: Any]] = []
             for (cOpt, vOpt, plannedItem) in planned {
                 var item = plannedItem
@@ -224,7 +226,7 @@ extension ToolRouter {
                 }
                 out.append(item)
             }
-            return ["dry_run": dry, "writes": out] as [String: Any]
+            return Sensitive.flag(["dry_run": dry, "writes": out], dry ? sensitive : [])
         case "notify":
             let acc = try store.accessory(try a.req("accessory_id"), in: home)
             let on = a.bool("enable") ?? true
@@ -374,7 +376,9 @@ extension ToolRouter {
         case "add":
             let set = try store.scene(try a.req("scene"), in: home)
             let writes = try writeActions(a.dicts("actions"), home)
+            let sensitive = Sensitive.names(writes.map(\.0.characteristic))
             if !dry {
+                try Sensitive.require(sensitive, a)
                 let undo = Rollback()
                 do {
                     for (w, _) in writes {
@@ -385,7 +389,7 @@ extension ToolRouter {
                     throw await undo.unwind(after: error)
                 }
             }
-            return doneDict(dry, "add \(writes.count) action(s) to \(set.name)", ["actions": writes.map(\.1)])
+            return Sensitive.flag(doneDict(dry, "add \(writes.count) action(s) to \(set.name)", ["actions": writes.map(\.1)]), dry ? sensitive : [])
         case "remove":
             let set = try store.scene(try a.req("scene"), in: home)
             let accKey = try a.req("accessory")
@@ -445,11 +449,12 @@ extension ToolRouter {
             try requireNewAutomationName(name, home)
             let scenes = try scenesFor(a, home, name: name, dry: dry)
             if dry {
-                return ["dry_run": true, "would": "create automation \(name)", "when_any": events.map(describe),
+                return Sensitive.flag(["dry_run": true, "would": "create automation \(name)", "when_any": events.map(describe),
                         "end_events": end.map(describe), "only_if": predicate?.predicateFormat ?? "always",
                         "weekdays": a.ints("weekdays") ?? [], "execute_once": a.bool("execute_once") ?? false,
-                        "runs": scenes.names] as [String: Any]
+                        "runs": scenes.names], scenes.sensitive)
             }
+            try Sensitive.require(scenes.sensitive, a)
             let undo = Rollback()
             let trigger = HMEventTrigger(name: name, events: events, end: end.isEmpty ? nil : end,
                                          recurrences: recurrences, predicate: predicate)
@@ -473,9 +478,10 @@ extension ToolRouter {
             try requireNewAutomationName(name, home)
             let scenes = try scenesFor(a, home, name: name, dry: dry)
             if dry {
-                return ["dry_run": true, "would": "create timer automation \(name)", "fire_date": fire,
-                        "recurrence": a.values["recurrence"] as Any, "runs": scenes.names] as [String: Any]
+                return Sensitive.flag(["dry_run": true, "would": "create timer automation \(name)", "fire_date": fire,
+                        "recurrence": a.values["recurrence"] as Any, "runs": scenes.names], scenes.sensitive)
             }
+            try Sensitive.require(scenes.sensitive, a)
             let trigger = HMTimerTrigger(name: name, fireDate: fire, recurrence: rec)
             let undo = Rollback()
             do {
@@ -506,7 +512,9 @@ extension ToolRouter {
                 if !removeScenes.isEmpty { changes.append("remove scenes \(removeScenes.map(\.name))") }
                 if let n = a.str("new_name") { changes.append("name: \(n)") }
                 guard !changes.isEmpty else { throw BridgeError.message("Nothing to change") }
-                if dry { return ["dry_run": true, "automation": t.name, "changes": changes] as [String: Any] }
+                let sensitive = Sensitive.names(sets: addScenes)
+                if dry { return Sensitive.flag(["dry_run": true, "automation": t.name, "changes": changes], sensitive) }
+                try Sensitive.require(sensitive, a)
                 func copies(_ evs: [HMEvent]) -> [HMEvent] { evs.map { ($0 as NSObject).copy() as? HMEvent ?? $0 } }
                 let oldEvents = copies(e.events), oldEnd = copies(e.endEvents)
                 let oldPred = e.predicate, oldRec = e.recurrences, oldOnce = e.executeOnce, oldName = e.name
@@ -701,6 +709,8 @@ extension ToolRouter {
 
     private struct SceneSource {
         let names: [String]
+        /// Locks, garage doors and security systems these scenes would change.
+        let sensitive: [String]
         /// Creates the inline scene if there is one, registering its removal with `undo`.
         let resolve: (Rollback) async throws -> [HMActionSet]
     }
@@ -718,13 +728,14 @@ extension ToolRouter {
         if let one = a.str("scene_id") { keys.append(one) }
         if !keys.isEmpty {
             let sets = try keys.map { try store.scene($0, in: home) }
-            return SceneSource(names: sets.map(\.name), resolve: { _ in sets })
+            return SceneSource(names: sets.map(\.name), sensitive: Sensitive.names(sets: sets), resolve: { _ in sets })
         }
         if home.actionSets.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
             throw BridgeError.message("A scene named \(name) already exists; pass scene_ids or use another automation name")
         }
         let writes = try writeActions(a.dicts("actions"), home)
-        return SceneSource(names: ["new scene \(name) (\(writes.count) actions)"], resolve: { undo in
+        return SceneSource(names: ["new scene \(name) (\(writes.count) actions)"],
+                           sensitive: Sensitive.names(writes.map(\.0.characteristic)), resolve: { undo in
             let set: HMActionSet = try await HK.make { home.addActionSet(withName: name, completionHandler: $0) }
             undo.add("removed new scene \(name)") { try await HK.run { home.removeActionSet(set, completionHandler: $0) } }
             for (w, _) in writes { try await HK.run { set.addAction(w, completionHandler: $0) } }

@@ -159,9 +159,9 @@ async def homekit_accessories(action: Literal["list", "search", "get", "control"
                               value: str | None = None, service_name: str | None = None,
                               service_id: str | None = None, service_index: int | None = None,
                               verify: bool | None = None, no_refresh: bool | None = None,
-                              dry_run: bool | None = None):
+                              dry_run: bool | None = None, confirm: bool | None = None):
     """Accessories. list (optionally by room), search (name/room/category/service type), get (every service and characteristic with type UUID, value, readable/writable, format, min/max/step, units, valid values; reads live values unless no_refresh), control (write one characteristic).
-    control writes any characteristic HomeKit marks writable, which covers device settings as well as on/off: pass a friendly name (power, brightness, hue, saturation, color_temperature, target_temperature, target_heating_cooling, heating_threshold, cooling_threshold, lock_target_state, target_door_state, target_position, rotation_speed, swing_mode, active, target_humidity, volume, mute, lock_physical_controls, set_duration) or the type UUID from get. value is a string ("true", "40", "locked", "heat"). Writes are read back: verified=true when the device reports the new value; verified=false plus "reads" when it reports something else (the write was still sent, e.g. a light that is off or rounds values; verify=false skips the read-back). Some lights turn on when brightness is written. dry_run previews. Use service_name / service_id / service_index to pick one gang of a multi-gang device."""
+    control writes any characteristic HomeKit marks writable, which covers device settings as well as on/off: pass a friendly name (power, brightness, hue, saturation, color_temperature, target_temperature, target_heating_cooling, heating_threshold, cooling_threshold, lock_target_state, target_door_state, target_position, rotation_speed, swing_mode, active, target_humidity, volume, mute, lock_physical_controls, set_duration) or the type UUID from get. value is a string ("true", "40", "locked", "heat"). Writes are read back: verified=true when the device reports the new value; verified=false plus "reads" when it reports something else (the write was still sent, e.g. a light that is off or rounds values; verify=false skips the read-back). Some lights turn on when brightness is written. dry_run previews. Use service_name / service_id / service_index to pick one gang of a multi-gang device. Anything that changes a lock, garage door or security system (directly, through a scene, or an automation running one) needs confirm=true; ask the user first. Dry runs report needs_confirm."""
     return await _call("homekit_accessories", locals())
 
 
@@ -185,16 +185,16 @@ async def homekit_manage(action: Literal["rename", "set_display_as", "remove_acc
 # ---------- scenes ----------
 @_tool(CONTROL)
 async def homekit_scenes(action: Literal["list", "get", "trigger"] = "list", home_id: str | None = None,
-                         scene_id: str | None = None):
-    """Scenes: list, get (every action in the scene), trigger (run it now)."""
+                         scene_id: str | None = None, dry_run: bool | None = None, confirm: bool | None = None):
+    """Scenes: list, get (every action in the scene), trigger (run it now; dry_run=true lists what it would do). Anything that changes a lock, garage door or security system (directly, through a scene, or an automation running one) needs confirm=true; ask the user first. Dry runs report needs_confirm."""
     return await _call("homekit_scenes", locals())
 
 
 @_tool(EDIT)
 async def homekit_scene_edit(action: Literal["create", "update", "rename", "delete"], scene: str,
                              actions: list[SceneRow] | None = None, new_name: str | None = None,
-                             home_id: str | None = None, dry_run: bool | None = None):
-    """Create, replace, rename or delete a scene. actions rows: {"accessory": UUID or name, "property": characteristic name or type UUID, "value": string, optional "room", "service_name", "service_id", "service_index"}. update replaces the whole action list but keeps the scene's UUID, so automations that run it keep working. dry_run=true previews."""
+                             home_id: str | None = None, dry_run: bool | None = None, confirm: bool | None = None):
+    """Create, replace, rename or delete a scene. actions rows: {"accessory": UUID or name, "property": characteristic name or type UUID, "value": string, optional "room", "service_name", "service_id", "service_index"}. update replaces the whole action list but keeps the scene's UUID, so automations that run it keep working. dry_run=true previews. Anything that changes a lock, garage door or security system (directly, through a scene, or an automation running one) needs confirm=true; ask the user first. Dry runs report needs_confirm."""
     return await _call("homekit_scene_edit", locals())
 
 
@@ -214,10 +214,11 @@ async def homekit_automations(action: Literal["list", "get", "create", "create_t
                               conditions: list[dict[str, Any]] | None = None,
                               time_after: str | None = None, time_before: str | None = None,
                               duration_seconds: int | None = None, clear_duration: bool | None = None,
-                              weekdays: list[int] | None = None, dry_run: bool | None = None):
+                              weekdays: list[int] | None = None, dry_run: bool | None = None,
+                              confirm: bool | None = None):
     """Automations. list / get. Triggers: create (button: accessory_id + press_type 0 single, 1 double, 2 long, service_index picks the button; or state change: accessory_id + characteristic + trigger_value), create_time (time "HH:MM", "sunrise", "sunset", "sunset-30", "sunrise+15"), create_presence (presence first_arrives / last_leaves / any_arrives / any_leaves, presence_who anyone or me). Each runs scene_id or makes a scene from actions rows {"accessory","property","value"}.
     Gates, all ANDed: weekdays (1=Sun..7=Sat); conditions rows {"accessory","property","value","op"("==" default, "!=", ">", ">=", "<", "<=")} or {"presence": "anyone_home" | "nobody_home" | "me_home" | "me_away"}; time_after / time_before (HH:MM or sunrise/sunset with offset; a window crossing midnight like sunset to sunrise works). duration_seconds turns the actions back after that long.
-    edit changes in place and keeps the UUID: pass only what changes (a new time, presence or accessory trigger; conditions and time window, rebuilt together from what you pass; weekdays, [] for every day; duration_seconds or clear_duration; new_name). enable / disable / rename / delete. dry_run=true previews."""
+    edit changes in place and keeps the UUID: pass only what changes (a new time, presence or accessory trigger; conditions and time window, rebuilt together from what you pass; weekdays, [] for every day; duration_seconds or clear_duration; new_name). enable / disable / rename / delete. dry_run=true previews. Anything that changes a lock, garage door or security system (directly, through a scene, or an automation running one) needs confirm=true; ask the user first. Dry runs report needs_confirm."""
     return await _call("homekit_automations", locals())
 
 
@@ -237,8 +238,8 @@ async def homekit_devices(action: Literal["identify", "unblock", "read", "write_
                           home_id: str | None = None, accessory_id: str | None = None, characteristic: str | None = None,
                           service_name: str | None = None, service_id: str | None = None, service_index: int | None = None,
                           writes: list[SceneRow] | None = None, enable: bool | None = None, verify: bool | None = None,
-                          dry_run: bool | None = None):
-    """Per-accessory operations. identify (blink/beep), unblock, read (live read of one characteristic with metadata), write_many (several writes in one call, each read back; rows {"accessory","property","value", optional "room","service_name","service_id","service_index"}), notify (enable=true/false change notifications so changes show in homekit_events), linked_services, profiles (bridge, Matter node id, network protection, camera, firmware, category)."""
+                          dry_run: bool | None = None, confirm: bool | None = None):
+    """Per-accessory operations. identify (blink/beep), unblock, read (live read of one characteristic with metadata), write_many (several writes in one call, each read back; rows {"accessory","property","value", optional "room","service_name","service_id","service_index"}), notify (enable=true/false change notifications so changes show in homekit_events), linked_services, profiles (bridge, Matter node id, network protection, camera, firmware, category). Anything that changes a lock, garage door or security system (directly, through a scene, or an automation running one) needs confirm=true; ask the user first. Dry runs report needs_confirm."""
     return await _call("homekit_devices", locals())
 
 
@@ -253,8 +254,9 @@ async def homekit_cameras(action: Literal["list", "settings", "set", "snapshot"]
 @_tool(EDIT)
 async def homekit_scene_actions(action: Literal["builtin", "add", "remove"], home_id: str | None = None,
                                 scene: str | None = None, actions: list[SceneRow] | None = None,
-                                accessory: str | None = None, property: str | None = None, dry_run: bool | None = None):
-    """Change a scene without replacing it. builtin (Apple's Wake Up, Sleep, Leave Home and Arrive Home scenes and their actions), add (append actions rows to scene), remove (drop the scene's actions on one accessory, optionally only one property). dry_run previews."""
+                                accessory: str | None = None, property: str | None = None, dry_run: bool | None = None,
+                                confirm: bool | None = None):
+    """Change a scene without replacing it. builtin (Apple's Wake Up, Sleep, Leave Home and Arrive Home scenes and their actions), add (append actions rows to scene), remove (drop the scene's actions on one accessory, optionally only one property). dry_run previews. Anything that changes a lock, garage door or security system (directly, through a scene, or an automation running one) needs confirm=true; ask the user first. Dry runs report needs_confirm."""
     return await _call("homekit_scene_actions", locals())
 
 
@@ -268,8 +270,8 @@ async def homekit_triggers(action: Literal["get", "create_event", "create_timer"
                            actions: list[SceneRow] | None = None, add_scenes: list[str] | None = None,
                            remove_scenes: list[str] | None = None, fire_date: str | None = None,
                            recurrence: dict[str, Any] | None = None, enabled: bool | None = None,
-                           dry_run: bool | None = None):
-    """Full automations (every trigger type Apple exposes). create_event: events = ANY one fires it; rows {"accessory","characteristic","value"} | {"accessory","characteristic","any_change":true} | {"accessory","characteristic","min","max"} (enters a range) | {"button": accessory, "press": 0/1/2} | {"time": "HH:MM" or "sunset-30"} | {"presence": first_arrives|last_leaves|any_arrives|any_leaves, "who": anyone|me} | {"latitude","longitude","radius_m","on": enter|exit}. end_events turn it back: {"duration_seconds"} and/or characteristic rows. conditions (ALL must hold): {"accessory","property","value","op"} | {"presence": anyone_home|nobody_home|me_home|me_away} | {"any":[...]} | {"all":[...]} | {"not":{...}}; time_after/time_before (windows across midnight work); weekdays 1=Sun..7=Sat; execute_once; scene_ids (several) or scene_id or inline actions. create_timer: fire_date ISO 8601 with zone, recurrence {"every": n, "unit": minute(>=5)|hour|day|week}. update: events, end_events, conditions, time window, weekdays, execute_once, add_scenes, remove_scenes, new_name; timers: fire_date, recurrence. get adds activation state (e.g. disabled_no_home_hub). Enable, disable, rename and delete stay in homekit_automations. dry_run previews."""
+                           dry_run: bool | None = None, confirm: bool | None = None):
+    """Full automations (every trigger type Apple exposes). create_event: events = ANY one fires it; rows {"accessory","characteristic","value"} | {"accessory","characteristic","any_change":true} | {"accessory","characteristic","min","max"} (enters a range) | {"button": accessory, "press": 0/1/2} | {"time": "HH:MM" or "sunset-30"} | {"presence": first_arrives|last_leaves|any_arrives|any_leaves, "who": anyone|me} | {"latitude","longitude","radius_m","on": enter|exit}. end_events turn it back: {"duration_seconds"} and/or characteristic rows. conditions (ALL must hold): {"accessory","property","value","op"} | {"presence": anyone_home|nobody_home|me_home|me_away} | {"any":[...]} | {"all":[...]} | {"not":{...}}; time_after/time_before (windows across midnight work); weekdays 1=Sun..7=Sat; execute_once; scene_ids (several) or scene_id or inline actions. create_timer: fire_date ISO 8601 with zone, recurrence {"every": n, "unit": minute(>=5)|hour|day|week}. update: events, end_events, conditions, time window, weekdays, execute_once, add_scenes, remove_scenes, new_name; timers: fire_date, recurrence. get adds activation state (e.g. disabled_no_home_hub). Enable, disable, rename and delete stay in homekit_automations. dry_run previews. Anything that changes a lock, garage door or security system (directly, through a scene, or an automation running one) needs confirm=true; ask the user first. Dry runs report needs_confirm."""
     return await _call("homekit_triggers", locals())
 
 

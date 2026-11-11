@@ -33,7 +33,9 @@ claude.ai ──> your FastMCP server (OAuth) ──> vps/homekit_tools.py
 | `homekit_history` | Local history of every device: status, devices, query, events, summaries (occupancy, on times, levels, activity, co-changes, automations), read-only SQL, pause/resume, snapshot_now, notify_now |
 | `private_probe`, `private_homed_db` | Optional, undocumented HomeKit: see below |
 
-Every write takes `dry_run`. Changes that need several HomeKit calls roll back the earlier steps if a
+Every write takes `dry_run`, including running a scene. Anything that would change a lock, garage door or
+security system (directly, through a scene, or through an automation that runs one) also needs
+`confirm=true`; its dry run says so. Changes that need several HomeKit calls roll back the earlier steps if a
 later one fails, and say what was put back. [COVERAGE.md](COVERAGE.md) maps each HomeKit API to its tool. Writes are logged to
 `~/Library/Logs/homekit-bridge/actions.jsonl`.
 
@@ -119,7 +121,8 @@ that differ from their last saved row, a full snapshot every 6 hours, a re-read 
 accessories every hour, and scene runs. Its only HomeKit write is switching change notifications on.
 
 Noisy sensors are throttled when saved, always against the last saved value: CO2 on a move of 25 ppm,
-light level on a 10% move (at least 1 lux), temperature on 0.2 °C, humidity on 1%. Air quality, ozone,
+light level on a 10% move (at least 1 lux), temperature on 0.2 °C, humidity on 1%, and these at most once
+a minute (a newer value waits and is saved when the minute is up). Air quality, ozone,
 NO2, SO2, PM2.5, PM10 and VOC readings are saved only once a new value has held for 60 seconds (stamped
 with the time it first appeared). Motion, occupancy, contact, power, brightness, color, outlets,
 switches, buttons and the bridge's own writes are never throttled. `homekit_history status` shows how
