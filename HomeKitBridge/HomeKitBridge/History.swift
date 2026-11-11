@@ -454,6 +454,7 @@ final class History {
             let t = Date()
             if let saved = lastSavedAt[cid], t.timeIntervalSince(saved) < HistoryConst.minimumGap {
                 // Too soon after the last saved row: keep the newest value and save it when the gap is up.
+                if let p = held[cid], p.v == now.0, p.s == now.1 { return }   // same value keeps its time
                 if held[cid] != nil { suppressed += 1 }
                 held[cid] = Held(v: now.0, s: now.1, since: t, due: saved.addingTimeInterval(HistoryConst.minimumGap))
                 return
@@ -467,6 +468,7 @@ final class History {
         guard !paused else { return }
         for (cid, p) in held where now >= p.due {
             save(cid, (p.v, p.s), src: 0, at: p.since)
+            lastSavedAt[cid] = now   // the minimum gap runs from when it was written, not from its stamp
             heldSaved += 1
         }
     }
@@ -1160,7 +1162,7 @@ final class History {
             "limit": num("Row cap (default 500, max 5000; co_changes default 50)"),
             "sql": str("sql: one read-only statement"),
         ]
-        let desc = "Long-term HomeKit history recorded by the bridge on the Mac: every change of every notifying characteristic (lights, brightness, color, motion, occupancy, light level, contact, temperature, humidity, outlets, switches, buttons...; CO2, light level, temperature and humidity saved on meaningful moves, air quality and particulates once a value holds 60 s) plus 15-minute snapshots of changed values, a full snapshot every 6 hours, and scene runs (automation runs cannot be recorded on a Mac). Read-only except pause/resume/snapshot_now/notify_now. Actions: status (size, counts, per-home recording health), devices (what is tracked, change counts), query (raw readings, newest first), events (automation_ran, scene_ran, scene_triggered, reachability_change, homes_updated, accessory_controlled, bridge_started), summary (kind: occupancy, on_times, levels, activity, co_changes, automations), sql (one read-only SELECT on tables chars, readings, events, meta and view readings_named; readings.t is unix seconds; src 0 change, 1 snapshot, 2 refresh). Times: ISO 8601, YYYY-MM-DD, or relative 30m/12h/7d/4w."
+        let desc = "Long-term HomeKit history recorded by the bridge on the Mac: every change of every notifying characteristic (lights, brightness, color, motion, occupancy, light level, contact, temperature, humidity, outlets, switches, buttons...; CO2, light level, temperature and humidity saved on meaningful moves and at most once a minute, air quality and particulates once a value holds 60 s) plus 15-minute snapshots of changed values, a full snapshot every 6 hours, and scene runs (automation runs cannot be recorded on a Mac). Read-only except pause/resume/snapshot_now/notify_now. Actions: status (size, counts, per-home recording health), devices (what is tracked, change counts), query (raw readings, newest first), events (automation_ran, scene_ran, scene_triggered, reachability_change, homes_updated, accessory_controlled, bridge_started), summary (kind: occupancy, on_times, levels, activity, co_changes, automations), sql (one read-only SELECT on tables chars, readings, events, meta and view readings_named; readings.t is unix seconds; src 0 change, 1 snapshot, 2 refresh). Times: ISO 8601, YYYY-MM-DD, or relative 30m/12h/7d/4w."
         let schema: [String: Any] = ["type": "object", "properties": props]
         return [["name": "homekit_history", "description": desc, "inputSchema": schema]]
     }

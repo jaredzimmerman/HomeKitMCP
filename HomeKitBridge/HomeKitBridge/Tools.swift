@@ -523,9 +523,11 @@ final class ToolRouter {
             return triggerDict(try store.trigger(try a.req("id"), in: home), detail: true)
         case "enable", "disable":
             let t = try store.trigger(try a.req("id"), in: home)
-            if !dry && action == "enable" { try Sensitive.require(Sensitive.names(sets: t.actionSets), a) }
-            if !dry { try await HK.run { t.enable(action == "enable", completionHandler: $0) } }
-            return [dry ? "would" : "done": "\(action) \(t.name)"]
+            let sensitive = action == "enable" ? Sensitive.names(sets: t.actionSets) : []
+            if dry { return Sensitive.flag(["would": "\(action) \(t.name)"], sensitive) }
+            try Sensitive.require(sensitive, a)
+            try await HK.run { t.enable(action == "enable", completionHandler: $0) }
+            return ["done": "\(action) \(t.name)"]
         case "rename":
             let t = try store.trigger(try a.req("id"), in: home)
             let n = try a.req("new_name")
@@ -966,7 +968,7 @@ enum Sensitive {
     }
 
     static func require(_ found: [String], _ a: Args) throws {
-        guard !found.isEmpty, a.values["confirm"] as? Bool != true, (a.values["confirm"] as? String)?.lowercased() != "true" else { return }
+        guard !found.isEmpty, a.bool("confirm") != true else { return }
         throw BridgeError.message("This changes a lock, garage door or security system (\(found.joined(separator: ", "))). Confirm with the person, then repeat the call with confirm=true.")
     }
 

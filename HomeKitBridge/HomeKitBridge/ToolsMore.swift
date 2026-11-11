@@ -226,7 +226,7 @@ extension ToolRouter {
                 }
                 out.append(item)
             }
-            return ["dry_run": dry, "writes": out] as [String: Any]
+            return Sensitive.flag(["dry_run": dry, "writes": out], dry ? sensitive : [])
         case "notify":
             let acc = try store.accessory(try a.req("accessory_id"), in: home)
             let on = a.bool("enable") ?? true
@@ -376,8 +376,9 @@ extension ToolRouter {
         case "add":
             let set = try store.scene(try a.req("scene"), in: home)
             let writes = try writeActions(a.dicts("actions"), home)
+            let sensitive = Sensitive.names(writes.map(\.0.characteristic))
             if !dry {
-                try Sensitive.require(Sensitive.names(writes.map(\.0.characteristic)), a)
+                try Sensitive.require(sensitive, a)
                 let undo = Rollback()
                 do {
                     for (w, _) in writes {
@@ -388,7 +389,7 @@ extension ToolRouter {
                     throw await undo.unwind(after: error)
                 }
             }
-            return doneDict(dry, "add \(writes.count) action(s) to \(set.name)", ["actions": writes.map(\.1)])
+            return Sensitive.flag(doneDict(dry, "add \(writes.count) action(s) to \(set.name)", ["actions": writes.map(\.1)]), dry ? sensitive : [])
         case "remove":
             let set = try store.scene(try a.req("scene"), in: home)
             let accKey = try a.req("accessory")

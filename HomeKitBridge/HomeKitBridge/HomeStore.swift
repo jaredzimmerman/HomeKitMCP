@@ -277,6 +277,9 @@ final class Rollback {
         var message = "\(error)"
         if !undone.isEmpty { message += " Rolled back: \(Rollback.summarize(undone))." }
         if !failed.isEmpty { message += " Could not undo: \(failed.joined(separator: "; ")); check the Home app." }
+        if "\(error)".contains("did not answer within") {
+            message += " The step that timed out may still finish later; check the Home app for a leftover."
+        }
         return BridgeError.message(message)
     }
 
